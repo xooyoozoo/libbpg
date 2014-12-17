@@ -1909,6 +1909,9 @@ void help(int is_full)
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
+           "-aqstrength          set x265's AQ strength, where higher further prioritizes low effort textural areas (0.0 to 3.0, default = 1)\n"
+           "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
+           "-wpp                 splits, worsens entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-premul              store the color with premultiplied alpha\n"
            "-limitedrange        encode the color data with the limited range of video\n"
            "-hash                include MD5 hash in HEVC bitstream\n"
@@ -1924,6 +1927,9 @@ struct option long_opts[] = {
     { "hash", no_argument },
     { "keepmetadata", no_argument },
     { "alphaq", required_argument },
+    { "aqstrength", required_argument },
+    { "deblocking", required_argument },
+    { "wpp", required_argument },
     { "lossless", no_argument },
     { "limitedrange", no_argument },
     { "premul", no_argument },
@@ -1938,8 +1944,10 @@ int main(int argc, char **argv)
     uint8_t *out_buf, *alpha_buf, *extension_buf;
     int out_buf_len, alpha_buf_len, verbose;
     FILE *f;
-    int qp, c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
-    int keep_metadata, cb_size, width, height, compress_level, alpha_qp;
+    int c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
+    int keep_metadata, cb_size, width, height, compress_level;
+    double qp, alpha_qp, aq_strength;
+    int deblocking, wpp;
     int bit_depth, lossless_mode, i, limited_range, premultiplied_alpha;
     BPGImageFormatEnum format;
     BPGColorSpaceEnum color_space;
@@ -1949,6 +1957,9 @@ int main(int argc, char **argv)
     outfilename = DEFAULT_OUTFILENAME;
     qp = DEFAULT_QP;
     alpha_qp = -1;
+    aq_strength = 1.0;
+    deblocking = -1;
+    wpp = 0;
     sei_decoded_picture_hash = 0;
     format = BPG_FORMAT_420;
     color_space = BPG_CS_YCbCr;
@@ -1975,23 +1986,35 @@ int main(int argc, char **argv)
                 keep_metadata = 1;
                 break;
             case 2:
-                alpha_qp = atoi(optarg);
+                alpha_qp = atof(optarg);
                 if (alpha_qp < 0 || alpha_qp > 51) {
                     fprintf(stderr, "alpha_qp must be between 0 and 51\n");
                     exit(1);
                 }
                 break;
             case 3:
+                aq_strength = atof(optarg);
+                aq_strength = aq_strength <= 0 ? 0.0 : aq_strength >= 3 ? 3.0 : aq_strength;
+                break;
+            case 4:
+                deblocking = atoi(optarg);
+                deblocking = deblocking <= -6 ? -6 : deblocking >= 6 ? 6 : deblocking;
+                break;
+            case 5:
+                wpp = atoi(optarg);
+                wpp = wpp <= 0 ? 0 : wpp >= 1 ? 1 : wpp;
+                break;
+            case 6:
                 lossless_mode = 1;
                 color_space = BPG_CS_RGB;
                 format = BPG_FORMAT_444;
                 bit_depth = 8;
                 limited_range = 0;
                 break;
-            case 4:
+            case 7:
                 limited_range = 1;
                 break;
-            case 5:
+            case 8:
                 premultiplied_alpha = 1;
                 break;
             default:
@@ -2003,9 +2026,9 @@ int main(int argc, char **argv)
             help(1);
             break;
         case 'q':
-            qp = atoi(optarg);
+            qp = atof(optarg);
             if (qp < 0 || qp > 51) {
-                fprintf(stderr, "qp must be between 0 and 51\n");
+                fprintf(stderr, "qp/crf must be between 0.0 and 51.0\n");
                 exit(1);
             }
             break;
@@ -2172,6 +2195,11 @@ int main(int argc, char **argv)
 
     memset(p, 0, sizeof(*p));
     p->qp = qp;
+    p->aq_strength = aq_strength;
+    p->deblocking = deblocking;
+    if ( height > 960 || width*height > 1536000 ) {
+        p->wpp = 1; // Be nice for posterity
+    } else {p->wpp = wpp;}
     p->lossless = lossless_mode;
     p->sei_decoded_picture_hash = sei_decoded_picture_hash;
     p->compress_level = compress_level;

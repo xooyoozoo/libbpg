@@ -5,11 +5,11 @@
 # Enable compilation of Javascript decoder with Emscripten
 #USE_EMCC=y
 # Enable x265 for the encoder (you must install it before)
-#USE_X265=y
+USE_X265=y
 # Enable the JCTVC code (best quality but slow) for the encoder
 USE_JCTVC=y
 # Enable it to use bit depths > 12 (need more tests to validate encoder)
-#USE_JCTVC_HIGH_BIT_DEPTH=y
+USE_JCTVC_HIGH_BIT_DEPTH=y
 # Enable the cross compilation for Windows
 #CONFIG_WIN32=y
 # Enable for compilation on MacOS X
@@ -36,7 +36,7 @@ EMCC=emcc
 
 PWD:=$(shell pwd)
 
-CFLAGS:=-Os -Wall -MMD -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -fno-math-errno -fno-signed-zeros -fno-tree-vectorize -fomit-frame-pointer
+CFLAGS:=-O3 -Wall -MMD -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -fno-math-errno -fno-signed-zeros -fno-tree-vectorize -fomit-frame-pointer
 CFLAGS+=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_REENTRANT
 CFLAGS+=-I.
 CFLAGS+=-DCONFIG_BPG_VERSION=\"$(shell cat VERSION)\"
@@ -51,7 +51,7 @@ EMLDFLAGS+=-s NO_FILESYSTEM=1 -s NO_BROWSER=1
 EMLDFLAGS+=-O3 --memory-init-file 0 --closure 1 --post-js post.js
 EMCFLAGS:=$(CFLAGS)
 
-LDFLAGS=-g
+LDFLAGS=-g -lz -flto
 ifdef CONFIG_APPLE
 LDFLAGS+=-Wl,-dead_strip
 else

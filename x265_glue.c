@@ -97,12 +97,16 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->fpsDenom = 1;
     p->totalFrames = 1;
 
-    p->rc.rateControlMode = X265_RC_CQP;
-    /* XXX: why do we need this offset to match the JCTVC quality ? */
-    if (img->bit_depth == 10)
-        p->rc.qp = params->qp + 7;
-    else
-        p->rc.qp = params->qp + 1;
+    p->rc.rateControlMode = X265_RC_CRF;
+    p->rc.rfConstant = params->qp;
+
+    p->deblockingFilterBetaOffset = params->deblocking;
+    p->deblockingFilterTCOffset = params->deblocking;
+    p->bEnableWavefront = params->wpp;
+
+    p->rc.aqMode = X265_AQ_VARIANCE;
+    p->rc.aqStrength = params->aq_strength;
+
     p->bLossless = params->lossless;
 
     enc = x265_encoder_open(p);

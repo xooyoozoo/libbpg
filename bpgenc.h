@@ -42,7 +42,10 @@ typedef struct {
 } Image;
 
 typedef struct {
-    int qp; /* quantizer 0-51 */
+    double qp; /* quantizer 0-51 */
+    double aq_strength; /* 0.0-3.0 */
+    int deblocking; /* -6 to 6 */
+    int wpp; /* 0 or 1 */
     int lossless; /* 0-1 lossless mode */
     int sei_decoded_picture_hash; /* 0=no hash, 1=MD5 hash */
     int compress_level; /* 1-9 */

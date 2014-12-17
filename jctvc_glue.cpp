@@ -93,7 +93,16 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     snprintf(buf, sizeof(buf),"--InputChromaFormat=%s", str);
     add_opt(&argc, argv, buf);
 
-    snprintf(buf, sizeof(buf),"--QP=%d", params->qp);
+    snprintf(buf, sizeof(buf),"--QP=%f", params->qp);
+    add_opt(&argc, argv, buf);
+
+    snprintf(buf, sizeof(buf),"--LoopFilterBetaOffset_div2=%d", params->deblocking);
+    add_opt(&argc, argv, buf);
+
+    snprintf(buf, sizeof(buf),"--LoopFilterTcOffset_div2=%d", params->deblocking);
+    add_opt(&argc, argv, buf);
+
+    snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
     add_opt(&argc, argv, buf);
 
     snprintf(buf, sizeof(buf),"--SEIDecodedPictureHash=%d",
