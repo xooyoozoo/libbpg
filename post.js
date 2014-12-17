@@ -45,7 +45,7 @@ bpg_decoder_get_line: Module['cwrap']('bpg_decoder_get_line', 'number', [ 'numbe
 
 bpg_decoder_close: Module['cwrap']('bpg_decoder_close', 'void', [ 'number' ] ),
 
-load: function(url) 
+load: function(url)
 {
     var request = new XMLHttpRequest();
     var this1 = this;
@@ -73,7 +73,7 @@ _onload: function(request, event)
         console.log("could not decode image");
         return;
     }
-    
+
     img_info_buf = this.malloc(9 * 4);
     this.bpg_decoder_get_info(img, img_info_buf);
     /* extract the image info */
@@ -83,7 +83,7 @@ _onload: function(request, event)
     this.free(img_info_buf);
 
 //    console.log("image " + w + " " + h);
-    
+
     /* select RGBA32 output */
     this.bpg_decoder_start(img, 1);
 
@@ -106,14 +106,14 @@ _onload: function(request, event)
     this.bpg_decoder_close(img);
 
     this['imageData'] = cimg;
-    
+
     if (this['onload'])
         this['onload']();
 }
 
 };
 
-window.onload = function() { 
+window.onload = function() {
     var i, n, el, tab, tab1, url, dec, canvas, id, style, ctx, dw, dh;
 
     /* put all images to load in a separate array */

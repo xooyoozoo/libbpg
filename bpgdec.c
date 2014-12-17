@@ -45,7 +45,7 @@ static void ppm_save(BPGDecoderContext *img, const char *filename)
     uint8_t *rgb_line;
 
     bpg_decoder_get_info(img, img_info);
-    
+
     w = img_info->width;
     h = img_info->height;
 
@@ -56,9 +56,9 @@ static void ppm_save(BPGDecoderContext *img, const char *filename)
         fprintf(stderr, "%s: I/O error\n", filename);
         exit(1);
     }
-        
+
     fprintf(f, "P6\n%d %d\n%d\n", w, h, 255);
-    
+
     bpg_decoder_start(img, BPG_OUTPUT_FORMAT_RGB24);
     for (y = 0; y < h; y++) {
         bpg_decoder_get_line(img, rgb_line);
@@ -124,7 +124,7 @@ static void png_save(BPGDecoderContext *img, const char *filename, int bit_depth
         color_type = PNG_COLOR_TYPE_RGB_ALPHA;
     else
         color_type = PNG_COLOR_TYPE_RGB;
-        
+
     png_set_IHDR(png_ptr, info_ptr, img_info->width, img_info->height,
                  bit_depth, color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
@@ -136,7 +136,7 @@ static void png_save(BPGDecoderContext *img, const char *filename, int bit_depth
         png_set_swap(png_ptr);
     }
 #endif
-    
+
     if (bit_depth == 16) {
         if (img_info->has_alpha)
             out_fmt = BPG_OUTPUT_FORMAT_RGBA64;
@@ -148,7 +148,7 @@ static void png_save(BPGDecoderContext *img, const char *filename, int bit_depth
         else
             out_fmt = BPG_OUTPUT_FORMAT_RGB24;
     }
-    
+
     bpg_decoder_start(img, out_fmt);
 
     bpp = (3 + img_info->has_alpha) * (bit_depth / 8);
@@ -158,9 +158,9 @@ static void png_save(BPGDecoderContext *img, const char *filename, int bit_depth
         png_write_row(png_ptr, row_pointer);
     }
     png_free(png_ptr, row_pointer);
-    
+
     png_write_end(png_ptr, NULL);
-    
+
     png_destroy_write_struct(&png_ptr, &info_ptr);
 
     fclose(f);
@@ -194,7 +194,7 @@ static void bpg_show_info(const char *filename, int show_extensions)
         "XMP",
         "Thumbnail",
     };
-        
+
     f = fopen(filename, "rb");
     if (!f) {
         fprintf(stderr, "Could not open %s\n", filename);
@@ -227,14 +227,14 @@ static void bpg_show_info(const char *filename, int show_extensions)
         printf(" w_plane=%d", p->has_w_plane);
     }
     if (p->has_alpha) {
-        printf(" alpha=%d premul=%d", 
+        printf(" alpha=%d premul=%d",
                p->has_alpha, p->premultiplied_alpha);
     }
     printf(" format=%s limited_range=%d bit_depth=%d\n",
            format_str[p->format],
            p->limited_range,
            p->bit_depth);
-           
+
     if (first_md) {
         const char *tag_name;
         printf("Extension data:\n");
@@ -268,7 +268,7 @@ int main(int argc, char **argv)
     uint8_t *buf;
     int buf_len, bit_depth, c, show_info;
     const char *outfilename, *filename, *p;
-    
+
     outfilename = "out.png";
     bit_depth = 8;
     show_info = 0;
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error while reading file\n");
         exit(1);
     }
-    
+
     fclose(f);
 
     img = bpg_decoder_open();
@@ -338,7 +338,7 @@ int main(int argc, char **argv)
 
     if (p && strcasecmp(p, "ppm") != 0) {
         png_save(img, outfilename, bit_depth);
-    } else 
+    } else
 #endif
     {
         ppm_save(img, outfilename);

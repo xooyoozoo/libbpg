@@ -49,9 +49,9 @@ typedef struct {
     int verbose;
 } HEVCEncodeParams;
 
-int x265_encode_picture(uint8_t **pbuf, Image *img, 
+int x265_encode_picture(uint8_t **pbuf, Image *img,
                         const HEVCEncodeParams *params);
-int jctvc_encode_picture(uint8_t **pbuf, Image *img, 
+int jctvc_encode_picture(uint8_t **pbuf, Image *img,
                          const HEVCEncodeParams *params);
 void save_yuv(Image *img, const char *filename);
 

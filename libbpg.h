@@ -1,6 +1,6 @@
 /*
  * BPG decoder
- * 
+ *
  * Copyright (c) 2014 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -114,7 +114,7 @@ uint8_t *bpg_decoder_get_data(BPGDecoderContext *s, int *pline_size, int plane);
    be freed with bpg_decoder_free_extension_data().
 
    Return 0 if OK, < 0 if unrecognized data. */
-int bpg_decoder_get_info_from_buf(BPGImageInfo *p, 
+int bpg_decoder_get_info_from_buf(BPGImageInfo *p,
                                   BPGExtensionData **pfirst_md,
                                   const uint8_t *buf, int buf_len);
 /* Free the extension data returned by bpg_decoder_get_info_from_buf() */

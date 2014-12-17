@@ -1,5 +1,5 @@
 /*
- * x265 encoder front-end  
+ * x265 encoder front-end
  *
  * Copyright (c) 2014 Fabrice Bellard
  *
@@ -31,7 +31,7 @@
 
 #include "x265.h"
 
-int x265_encode_picture(uint8_t **pbuf, Image *img, 
+int x265_encode_picture(uint8_t **pbuf, Image *img,
                         const HEVCEncodeParams *params)
 {
     x265_encoder *enc;
@@ -61,7 +61,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     preset = x265_preset_names[preset_index];
     if (params->verbose)
         printf("Using x265 preset: %s\n", preset);
-    
+
     x265_param_default_preset(p, preset, "ssim");
 
     p->bRepeatHeaders = 1;
@@ -91,7 +91,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         p->logLevel = X265_LOG_INFO;
     else
         p->logLevel = X265_LOG_NONE;
-        
+
     /* dummy frame rate */
     p->fpsNum = 25;
     p->fpsDenom = 1;
@@ -140,25 +140,25 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         buf_len += p_nal[i].sizeBytes;
     }
     //    printf("nal_count=%d buf_len=%d\n", nal_count, buf_len);
-    
+
     buf = malloc(buf_len);
     idx = 0;
     for(i = 0; i < nal_count; i++) {
         memcpy(buf + idx, p_nal[i].payload, p_nal[i].sizeBytes);
         idx += p_nal[i].sizeBytes;
     }
-    
+
     x265_encoder_close(enc);
 
     x265_param_free(p);
-    
+
     x265_picture_free(pic);
 
     *pbuf = buf;
     return buf_len;
  fail:
     x265_encoder_close(enc);
-    
+
     x265_param_free(p);
     x265_picture_free(pic);
     *pbuf = NULL;

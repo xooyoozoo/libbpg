@@ -23,7 +23,7 @@ static void add_opt(int *pargc, char **argv,
 }
 
 /* return the encoded data in *pbuf and the size. Return < 0 if error */
-int jctvc_encode_picture(uint8_t **pbuf, Image *img, 
+int jctvc_encode_picture(uint8_t **pbuf, Image *img,
                          const HEVCEncodeParams *params)
 {
     TAppEncTop  cTAppEncTop;
@@ -34,7 +34,7 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     FILE *f;
     uint8_t *out_buf;
     int out_buf_len, i;
-    
+
 #ifdef WIN32
     if (GetTempPath(sizeof(buf), buf) > sizeof(buf) - 1) {
         fprintf(stderr, "Temporary path too long\n");
@@ -53,7 +53,7 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     m_gcAnalyzeP.clear();
     m_gcAnalyzeB.clear();
     m_gcAnalyzeAll_in.clear();
-    
+
     cTAppEncTop.create();
 
     argc = 0;
@@ -95,20 +95,20 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
 
     snprintf(buf, sizeof(buf),"--QP=%d", params->qp);
     add_opt(&argc, argv, buf);
-    
-    snprintf(buf, sizeof(buf),"--SEIDecodedPictureHash=%d", 
+
+    snprintf(buf, sizeof(buf),"--SEIDecodedPictureHash=%d",
              params->sei_decoded_picture_hash);
     add_opt(&argc, argv, buf);
-    
+
     if (!params->verbose)
       add_opt(&argc, argv, "--Verbose=0");
-      
+
     /* single frame */
     add_opt(&argc, argv, "--FramesToBeEncoded=1");
-    
+
     /* no padding necessary (it is done before) */
     add_opt(&argc, argv, "--ConformanceWindowMode=0");
-    
+
     /* dummy frame rate */
     add_opt(&argc, argv, "--FrameRate=25");
 
@@ -150,17 +150,17 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         }
         printf("\n");
     }
-    
+
     if(!cTAppEncTop.parseCfg( argc, argv )) {
         fprintf(stderr, "Error while parsing options\n");
         cTAppEncTop.destroy();
         return -1;
     }
-    
+
     cTAppEncTop.encode();
-    
+
     cTAppEncTop.destroy();
-    
+
     for(i = 0; i < argc; i++)
         free(argv[i]);
     unlink(infilename);
@@ -171,7 +171,7 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         fprintf(stderr, "Could not open '%s'\n", outfilename);
         return -1;
     }
-    
+
     fseek(f, 0, SEEK_END);
     out_buf_len = ftell(f);
     fseek(f, 0, SEEK_SET);

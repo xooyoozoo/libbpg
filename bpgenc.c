@@ -76,7 +76,7 @@ typedef struct {
     int c_center;
 } ColorConvertState;
 
-static void convert_init(ColorConvertState *s, int in_bit_depth, 
+static void convert_init(ColorConvertState *s, int in_bit_depth,
                          int out_bit_depth, BPGColorSpaceEnum color_space,
                          int limited_range)
 {
@@ -91,9 +91,9 @@ static void convert_init(ColorConvertState *s, int in_bit_depth,
     mult = (double)out_pixel_max * (1 << c_shift) / (double)in_pixel_max;
     //    printf("mult=%f c_shift=%d\n", mult, c_shift);
     if (limited_range) {
-        mult_y = (double)(219 << (out_bit_depth - 8)) * (1 << c_shift) / 
+        mult_y = (double)(219 << (out_bit_depth - 8)) * (1 << c_shift) /
             (double)in_pixel_max;
-        mult_c = (double)(224 << (out_bit_depth - 8)) * (1 << c_shift) / 
+        mult_c = (double)(224 << (out_bit_depth - 8)) * (1 << c_shift) /
             (double)in_pixel_max;
     } else {
         mult_y = mult;
@@ -104,12 +104,12 @@ static void convert_init(ColorConvertState *s, int in_bit_depth,
         k_r = 0.299;
         k_b = 0.114;
         goto convert_ycc;
-        
+
     case BPG_CS_YCbCr_BT709:
-        k_r = 0.2126; 
+        k_r = 0.2126;
         k_b = 0.0722;
         goto convert_ycc;
-        
+
     case BPG_CS_YCbCr_BT2020:
         k_r = 0.2627;
         k_b = 0.0593;
@@ -123,7 +123,7 @@ static void convert_init(ColorConvertState *s, int in_bit_depth,
         rgb_to_ycc[6] = 0.5;
         rgb_to_ycc[7] = -0.5 * (1 - k_r - k_b) / (1 - k_r);
         rgb_to_ycc[8] = -0.5 * k_b / (1 - k_r);
-        
+
         for(i = 0; i < 3; i++)
             s->rgb_to_ycc[i] = lrint(rgb_to_ycc[i] * mult_y);
         for(i = 3; i < 9; i++)
@@ -182,9 +182,9 @@ static void rgb24_to_ycc(ColorConvertState *s,
         b = src[2];
         y_ptr[i] = clamp_pix((c0 * r + c1 * g + c2 * b +
                               y_offset) >> shift, pixel_max);
-        cb_ptr[i] = clamp_pix(((c3 * r + c4 * g + c5 * b + 
+        cb_ptr[i] = clamp_pix(((c3 * r + c4 * g + c5 * b +
                                 rnd) >> shift) + center, pixel_max);
-        cr_ptr[i] = clamp_pix(((c6 * r + c7 * g + c8 * b + 
+        cr_ptr[i] = clamp_pix(((c6 * r + c7 * g + c8 * b +
                                 rnd) >> shift) + center, pixel_max);
         src += incr;
     }
@@ -233,7 +233,7 @@ static void rgb24_to_ycgco(ColorConvertState *s,
         t1 = c_0_5 * g;
         t2 = c_0_25 * (r + b);
         y_ptr[i] = clamp_pix((t1 + t2 + y_offset) >> shift, pixel_max);
-        cb_ptr[i] = clamp_pix(((t1 - t2 + rnd) >> shift) + center, 
+        cb_ptr[i] = clamp_pix(((t1 - t2 + rnd) >> shift) + center,
                               pixel_max);
         cr_ptr[i] = clamp_pix(((c_0_5 * (r - b) +
                                 rnd) >> shift) + center, pixel_max);
@@ -274,7 +274,7 @@ static void luma8_to_gray(ColorConvertState *s,
 
 /* 16 bit input */
 
-static void rgb48_to_ycc(ColorConvertState *s, 
+static void rgb48_to_ycc(ColorConvertState *s,
                          PIXEL *y_ptr, PIXEL *cb_ptr, PIXEL *cr_ptr,
                          const void *src1, int n, int incr)
 {
@@ -302,15 +302,15 @@ static void rgb48_to_ycc(ColorConvertState *s,
         b = src[2];
         y_ptr[i] = clamp_pix((c0 * r + c1 * g + c2 * b +
                               y_offset) >> shift, pixel_max);
-        cb_ptr[i] = clamp_pix(((c3 * r + c4 * g + c5 * b + 
+        cb_ptr[i] = clamp_pix(((c3 * r + c4 * g + c5 * b +
                                 rnd) >> shift) + center, pixel_max);
-        cr_ptr[i] = clamp_pix(((c6 * r + c7 * g + c8 * b + 
+        cr_ptr[i] = clamp_pix(((c6 * r + c7 * g + c8 * b +
                                 rnd) >> shift) + center, pixel_max);
         src += incr;
     }
 }
 
-static void rgb48_to_ycgco(ColorConvertState *s, 
+static void rgb48_to_ycgco(ColorConvertState *s,
                            PIXEL *y_ptr, PIXEL *cb_ptr, PIXEL *cr_ptr,
                            const void *src1, int n, int incr)
 {
@@ -332,7 +332,7 @@ static void rgb48_to_ycgco(ColorConvertState *s,
         t1 = c_0_5 * g;
         t2 = c_0_25 * (r + b);
         y_ptr[i] = clamp_pix((t1 + t2 + y_offset) >> shift, pixel_max);
-        cb_ptr[i] = clamp_pix(((t1 - t2 + rnd) >> shift) + center, 
+        cb_ptr[i] = clamp_pix(((t1 - t2 + rnd) >> shift) + center,
                               pixel_max);
         cr_ptr[i] = clamp_pix(((c_0_5 * (r - b) +
                                 rnd) >> shift) + center, pixel_max);
@@ -341,7 +341,7 @@ static void rgb48_to_ycgco(ColorConvertState *s,
 }
 
 /* Note: use for alpha/W so no limited range */
-static void gray16_to_gray(ColorConvertState *s, 
+static void gray16_to_gray(ColorConvertState *s,
                            PIXEL *y_ptr, const uint16_t *src, int n, int incr)
 {
     int i, g, c, shift, rnd;
@@ -356,7 +356,7 @@ static void gray16_to_gray(ColorConvertState *s,
     }
 }
 
-static void luma16_to_gray(ColorConvertState *s, 
+static void luma16_to_gray(ColorConvertState *s,
                            PIXEL *y_ptr, const uint16_t *src, int n, int incr)
 {
     int i, g, c, shift, rnd;
@@ -371,7 +371,7 @@ static void luma16_to_gray(ColorConvertState *s,
     }
 }
 
-static void rgb48_to_rgb(ColorConvertState *s, 
+static void rgb48_to_rgb(ColorConvertState *s,
                          PIXEL *y_ptr, PIXEL *cb_ptr, PIXEL *cr_ptr,
                          const void *src1, int n, int incr)
 {
@@ -382,7 +382,7 @@ static void rgb48_to_rgb(ColorConvertState *s,
     luma16_to_gray(s, cr_ptr, src + 0, n, incr);
 }
 
-typedef void RGBConvertFunc(ColorConvertState *s, 
+typedef void RGBConvertFunc(ColorConvertState *s,
                             PIXEL *y_ptr, PIXEL *cb_ptr, PIXEL *cr_ptr,
                             const void *src, int n, int incr);
 
@@ -402,7 +402,7 @@ static RGBConvertFunc *rgb_to_cs[2][BPG_CS_COUNT] = {
         rgb48_to_ycc,
     }
 };
-    
+
 /* val = 1.0 - val */
 static void gray_one_minus(ColorConvertState *s, PIXEL *y_ptr, int n)
 {
@@ -447,10 +447,10 @@ static void decimate2_simple(PIXEL *dst, PIXEL *src, int n, int bit_depth)
     pixel_max = (1 << bit_depth) - 1;
     n2 = (n + 1) / 2;
     for(i = 0; i < n2; i++) {
-        dst[i] = clamp_pix(((src[-4] + src[5]) * DC4 + 
-                            (src[-3] + src[4]) * DC3 + 
-                            (src[-2] + src[3]) * DC2 + 
-                            (src[-1] + src[2]) * DC1 + 
+        dst[i] = clamp_pix(((src[-4] + src[5]) * DC4 +
+                            (src[-3] + src[4]) * DC3 +
+                            (src[-2] + src[3]) * DC2 +
+                            (src[-1] + src[2]) * DC1 +
                             (src[0] + src[1]) * DC0 + 64) >> 7, pixel_max);
         src += 2;
     }
@@ -483,10 +483,10 @@ static void decimate2_simple16(int16_t *dst, PIXEL *src, int n, int bit_depth)
     rnd = 1 << (shift - 1);
     n2 = (n + 1) / 2;
     for(i = 0; i < n2; i++) {
-        dst[i] = ((src[-4] + src[5]) * DC4 + 
-                  (src[-3] + src[4]) * DC3 + 
-                  (src[-2] + src[3]) * DC2 + 
-                  (src[-1] + src[2]) * DC1 + 
+        dst[i] = ((src[-4] + src[5]) * DC4 +
+                  (src[-3] + src[4]) * DC3 +
+                  (src[-2] + src[3]) * DC2 +
+                  (src[-1] + src[2]) * DC1 +
                   (src[0] + src[1]) * DC0 + rnd) >> shift;
         src += 2;
     }
@@ -537,28 +537,28 @@ static void decimate2_v(PIXEL *dst, int16_t **src, int pos, int n,
     src4 = src[pos];
     pos = add_mod_int(pos, 1, DTAPS);
     src5 = src[pos];
-    
+
     shift = 21 - bit_depth;
     offset = 1 << (shift - 1);
     pixel_max = (1 << bit_depth) - 1;
     for(i = 0; i < n; i++) {
-        dst[i] = clamp_pix(((srcm4[i] + src5[i]) * DC4 + 
-                            (srcm3[i] + src4[i]) * DC3 + 
-                            (srcm2[i] + src3[i]) * DC2 + 
-                            (srcm1[i] + src2[i]) * DC1 + 
+        dst[i] = clamp_pix(((srcm4[i] + src5[i]) * DC4 +
+                            (srcm3[i] + src4[i]) * DC3 +
+                            (srcm2[i] + src3[i]) * DC2 +
+                            (srcm1[i] + src2[i]) * DC1 +
                             (src0[i] + src1[i]) * DC0 + offset) >> shift, pixel_max);
     }
 }
 
 /* Note: we do the horizontal decimation first to use less CPU cache */
 static void decimate2_hv(uint8_t *dst, int dst_linesize,
-                         uint8_t *src, int src_linesize, 
+                         uint8_t *src, int src_linesize,
                          int w, int h, int bit_depth)
 {
     PIXEL *buf1;
     int16_t *buf2[DTAPS];
     int w2, pos, i, y, y1, y2;
-    
+
     w2 = (w + 1) / 2;
 
     buf1 = malloc(sizeof(PIXEL) * (w + 2 * DTAPS));
@@ -631,7 +631,7 @@ Image *image_alloc(int w, int h, BPGImageFormatEnum format, int has_alpha,
 
     img = malloc(sizeof(Image));
     memset(img, 0, sizeof(*img));
-    
+
     img->w = w;
     img->h = h;
     img->format = format;
@@ -651,7 +651,7 @@ Image *image_alloc(int w, int h, BPGImageFormatEnum format, int has_alpha,
         /* multiple of 16 pixels to add borders */
         w1 = (w1 + (W_PAD - 1)) & ~(W_PAD - 1);
         h1 = (h1 + (W_PAD - 1)) & ~(W_PAD - 1);
-        
+
         linesize = w1 << img->pixel_shift;
         img->data[i] = malloc(linesize * h1);
         img->linesize[i] = linesize;
@@ -738,7 +738,7 @@ void image_pad(Image *img, int cb_size)
         return;
     w1 = (img->w + cb_size - 1) & ~(cb_size - 1);
     h1 = (img->h + cb_size - 1) & ~(cb_size - 1);
-    
+
     if (img->format == BPG_FORMAT_GRAY)
         c_count = 1;
     else
@@ -746,11 +746,11 @@ void image_pad(Image *img, int cb_size)
     if (img->has_alpha)
         c_count++;
     for(c_idx = 0; c_idx < c_count; c_idx++) {
-        if (img->format == BPG_FORMAT_420 && 
+        if (img->format == BPG_FORMAT_420 &&
             (c_idx == 1 || c_idx == 2)) {
             h_shift = 1;
             v_shift = 1;
-        } else if (img->format == BPG_FORMAT_422 && 
+        } else if (img->format == BPG_FORMAT_422 &&
                    (c_idx == 1 || c_idx == 2)) {
             h_shift = 1;
             v_shift = 0;
@@ -858,28 +858,28 @@ Image *read_png(BPGMetaData **pmd,
     BPGImageFormatEnum format;
     ColorConvertState cvt_s, *cvt = &cvt_s;
     BPGMetaData *md, **plast_md, *first_md;
-    
+
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
                                      NULL, NULL, NULL);
     if (png_ptr == NULL) {
         return NULL;
     }
-    
+
     info_ptr = png_create_info_struct(png_ptr);
     if (info_ptr == NULL) {
        png_destroy_read_struct(&png_ptr, NULL, NULL);
        return NULL;
     }
-    
+
     if (setjmp(png_jmpbuf(png_ptr))) {
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         return NULL;
     }
-    
+
     png_init_io(png_ptr, f);
-    
+
     png_read_info(png_ptr, info_ptr);
-    
+
     bit_depth   = png_get_bit_depth(png_ptr, info_ptr);
     color_type = png_get_color_type(png_ptr, info_ptr);
 
@@ -911,7 +911,7 @@ Image *read_png(BPGMetaData **pmd,
     } else {
         format = BPG_FORMAT_444;
     }
-    
+
     has_alpha = (color_type == PNG_COLOR_TYPE_GRAY_ALPHA ||
                  color_type == PNG_COLOR_TYPE_RGB_ALPHA);
 
@@ -940,9 +940,9 @@ Image *read_png(BPGMetaData **pmd,
     for (y = 0; y < img->h; y++) {
         rows[y] = malloc(linesize);
     }
-    
+
     png_read_image(png_ptr, rows);
-    
+
     convert_init(cvt, bit_depth, out_bit_depth, color_space, limited_range);
 
     if (format != BPG_FORMAT_GRAY) {
@@ -951,7 +951,7 @@ Image *read_png(BPGMetaData **pmd,
 
         idx = (bit_depth == 16);
         convert_func = rgb_to_cs[idx][color_space];
-        
+
         for (y = 0; y < img->h; y++) {
             convert_func(cvt, (PIXEL *)(img->data[0] + y * img->linesize[0]),
                          (PIXEL *)(img->data[1] + y * img->linesize[1]),
@@ -993,9 +993,9 @@ Image *read_png(BPGMetaData **pmd,
         free(rows[y]);
     }
     free(rows);
-        
+
     png_read_end(png_ptr, info_ptr);
-    
+
     /* get the ICC profile if present */
     first_md = NULL;
     plast_md = &first_md;
@@ -1004,9 +1004,9 @@ Image *read_png(BPGMetaData **pmd,
         int comp_type;
         png_bytep iccp_buf;
         png_uint_32 iccp_buf_len;
-        
+
         if (png_get_iCCP(png_ptr, info_ptr,
-                         &name, &comp_type, &iccp_buf, &iccp_buf_len) == 
+                         &name, &comp_type, &iccp_buf, &iccp_buf_len) ==
             PNG_INFO_iCCP) {
             md = bpg_md_alloc(BPG_EXTENSION_TAG_ICCP);
             md->buf_len = iccp_buf_len;
@@ -1018,7 +1018,7 @@ Image *read_png(BPGMetaData **pmd,
     }
 
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-    
+
     *pmd = first_md;
     return img;
 }
@@ -1032,7 +1032,7 @@ static BPGMetaData *jpeg_get_metadata(jpeg_saved_marker_ptr first_marker)
     BPGMetaData *md, **plast_md, *first_md;
     int has_exif, has_xmp, l, iccp_chunk_count, i;
     jpeg_saved_marker_ptr iccp_chunks[256];
-    
+
     iccp_chunk_count = 0;
     has_exif = 0;
     has_xmp = 0;
@@ -1040,7 +1040,7 @@ static BPGMetaData *jpeg_get_metadata(jpeg_saved_marker_ptr first_marker)
     plast_md = &first_md;
     for (marker = first_marker; marker != NULL; marker = marker->next) {
 #if 0
-        printf("marker=APP%d len=%d\n", 
+        printf("marker=APP%d len=%d\n",
                marker->marker - JPEG_APP0, marker->data_length);
 #endif
         if (!has_exif && marker->marker == JPEG_APP0 + 1 &&
@@ -1056,7 +1056,7 @@ static BPGMetaData *jpeg_get_metadata(jpeg_saved_marker_ptr first_marker)
             has_exif = 1;
         } else if (!has_xmp && marker->marker == JPEG_APP0 + 1 &&
                    marker->data_length > sizeof(app1_xmp) &&
-                   !memcmp(marker->data, app1_xmp, sizeof(app1_xmp)) && 
+                   !memcmp(marker->data, app1_xmp, sizeof(app1_xmp)) &&
                    !has_xmp) {
             md = bpg_md_alloc(BPG_EXTENSION_TAG_XMP);
             l = sizeof(app1_xmp);
@@ -1073,7 +1073,7 @@ static BPGMetaData *jpeg_get_metadata(jpeg_saved_marker_ptr first_marker)
             l = sizeof(app2_iccp);
             chunk_index = marker->data[l];
             chunk_count = marker->data[l];
-            if (chunk_index == 0 || chunk_count == 0) 
+            if (chunk_index == 0 || chunk_count == 0)
                 continue;
             if (iccp_chunk_count == 0) {
                 iccp_chunk_count = chunk_count;
@@ -1118,7 +1118,7 @@ static BPGMetaData *jpeg_get_metadata(jpeg_saved_marker_ptr first_marker)
     return first_md;
 }
 
-Image *read_jpeg(BPGMetaData **pmd, FILE *f, 
+Image *read_jpeg(BPGMetaData **pmd, FILE *f,
                  int out_bit_depth)
 {
     struct jpeg_decompress_struct cinfo;
@@ -1140,12 +1140,12 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
     jpeg_save_markers(&cinfo, JPEG_APP0 + 2, 65535);
 
     jpeg_stdio_src(&cinfo, f);
-    
+
     jpeg_read_header(&cinfo, TRUE);
-    
+
     cinfo.raw_data_out = TRUE;
     cinfo.do_fancy_upsampling = FALSE;
-    
+
     jpeg_start_decompress(&cinfo);
 
     w = cinfo.output_width;
@@ -1236,7 +1236,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
         }
         plane_pointer[c_idx] = rows[c_idx];
     }
-    
+
     if (color_space == BPG_CS_RGB) {
         plane_idx[0] = 2;
         plane_idx[1] = 0;
@@ -1247,13 +1247,13 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
         plane_idx[2] = 2;
     }
     plane_idx[3] = 3;
-    
+
     convert_init(cvt, 8, out_bit_depth, color_space, 0);
 
     while (cinfo.output_scanline < cinfo.output_height) {
         y = cinfo.output_scanline;
         jpeg_read_raw_data(&cinfo, plane_pointer, y_h);
-        
+
         for(c_idx = 0; c_idx < cinfo.num_components; c_idx++) {
             if (c_idx == 1 || c_idx == 2) {
                 h1 = c_h;
@@ -1267,7 +1267,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
             idx = plane_idx[c_idx];
             for(i = 0; i < h1; i++) {
                 PIXEL *ptr;
-                ptr = (PIXEL *)(img->data[idx] + 
+                ptr = (PIXEL *)(img->data[idx] +
                                 img->linesize[idx] * (y1 + i));
                 gray8_to_gray(cvt, ptr, rows[c_idx][i], w1, 1);
                 if (color_space == BPG_CS_YCbCr && has_w_plane) {
@@ -1281,7 +1281,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
             }
         }
     }
-    
+
     for(c_idx = 0; c_idx < cinfo.num_components; c_idx++) {
         if (c_idx == 1 || c_idx == 2) {
             h1 = c_h;
@@ -1297,7 +1297,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
 
  the_end:
     jpeg_finish_decompress(&cinfo);
-    
+
     jpeg_destroy_decompress(&cinfo);
     *pmd = first_md;
     return img;
@@ -1321,7 +1321,7 @@ void save_yuv(Image *img, const char *filename)
     for(i = 0; i < c_count; i++) {
         get_plane_res(img, &c_w, &c_h, i);
         for(y = 0; y < c_h; y++) {
-            fwrite(img->data[i] + y * img->linesize[i], 
+            fwrite(img->data[i] + y * img->linesize[i],
                    1, c_w << img->pixel_shift, f);
         }
     }
@@ -1330,7 +1330,7 @@ void save_yuv(Image *img, const char *filename)
 
 
 /* return the position of the end of the NAL or -1 if error */
-static int extract_nal(uint8_t **pnal_buf, int *pnal_len, 
+static int extract_nal(uint8_t **pnal_buf, int *pnal_len,
                        const uint8_t *buf, int buf_len)
 {
     int idx, start, end, len;
@@ -1355,7 +1355,7 @@ static int extract_nal(uint8_t **pnal_buf, int *pnal_len,
     }
     end = idx;
     len = end - start;
-    
+
     nal_buf = malloc(len);
     nal_len = 0;
     idx = start;
@@ -1381,7 +1381,7 @@ static void put_ue(uint8_t **pp, uint32_t v)
 {
     uint8_t *p = *pp;
     int i, j;
-    
+
     for(i = 1; i < 5; i++) {
         if (v < (1 << (7 * i)))
             break;
@@ -1419,7 +1419,7 @@ static uint32_t get_bits(GetBitState *s, int n)
 
     p = s->idx >> 3;
     if ((p + 3) < s->buf_len) {
-        v = (buf[p] << 24) | (buf[p + 1] << 16) | 
+        v = (buf[p] << 24) | (buf[p + 1] << 16) |
             (buf[p + 2] << 8) | buf[p + 3];
     } else {
         v = 0;
@@ -1511,7 +1511,7 @@ static void put_ue_golomb(PutBitState *s, uint32_t v)
 
 /* suppress the VPS NAL and keep only the useful part of the SPS
    header. The decoder can rebuild a valid HEVC stream if needed. */
-static int build_modified_hevc(uint8_t **pout_buf, 
+static int build_modified_hevc(uint8_t **pout_buf,
                                const uint8_t *buf, int buf_len)
 {
     int nal_unit_type, nal_len, idx, i, ret, msps_buf_len;
@@ -1632,12 +1632,12 @@ static int build_modified_hevc(uint8_t **pout_buf,
         get_ue_golomb(gb); /* max_dec_pic_buffering */
         get_ue_golomb(gb); /* num_reorder_pics */
         get_ue_golomb(gb); /* max_latency_increase */
-        
+
         log2_min_cb_size = get_ue_golomb(gb) + 3;
         log2_diff_max_min_coding_block_size = get_ue_golomb(gb);
         log2_min_tb_size = get_ue_golomb(gb) + 2;
         log2_diff_max_min_transform_block_size = get_ue_golomb(gb);
-               
+
         max_transform_hierarchy_depth_inter = get_ue_golomb(gb);
         max_transform_hierarchy_depth_intra = get_ue_golomb(gb);
 
@@ -1679,10 +1679,10 @@ static int build_modified_hevc(uint8_t **pout_buf,
             sar_present = get_bits(gb, 1);
             sar_idx = get_bits(gb, 8);
             if (sar_idx == 255) {
-                skip_bits(gb, 16); /* sar_num */ 
-                skip_bits(gb, 16); /* sar_den */ 
+                skip_bits(gb, 16); /* sar_num */
+                skip_bits(gb, 16); /* sar_den */
             }
-            
+
             overscan_info_present_flag = get_bits(gb, 1);
             if (overscan_info_present_flag) {
                 skip_bits(gb, 1); /* overscan_appropriate_flag */
@@ -1744,9 +1744,9 @@ static int build_modified_hevc(uint8_t **pout_buf,
             }
             if (sps_range_extension_flag) {
                 sps_range_extension_flags = get_bits(gb, 9);
-                if (sps_range_extension_flags & ((1 << (8 - 3)) | 
-                                                 (1 << (8 - 4)) | 
-                                                 (1 << (8 - 6)) | 
+                if (sps_range_extension_flags & ((1 << (8 - 3)) |
+                                                 (1 << (8 - 4)) |
+                                                 (1 << (8 - 6)) |
                                                  (1 << (8 - 8)))) {
                     fprintf(stderr, "unsupported range extensions (0x%x)\n",
                             sps_range_extension_flags);
@@ -1758,7 +1758,7 @@ static int build_modified_hevc(uint8_t **pout_buf,
         /* build the modified SPS */
         msps_buf = malloc(nal_len + 32);
         memset(msps_buf, 0, nal_len + 16);
-        
+
         init_put_bits(pb, msps_buf);
         put_ue_golomb(pb, log2_min_cb_size - 3);
         put_ue_golomb(pb, log2_diff_max_min_coding_block_size);
@@ -1794,10 +1794,10 @@ static int build_modified_hevc(uint8_t **pout_buf,
 
         memcpy(p, msps_buf, msps_buf_len);
         p += msps_buf_len;
-        
+
         memcpy(p, buf + idx, buf_len - idx);
         p += buf_len - idx;
-        
+
         out_buf_len = p - out_buf;
         free(msps_buf);
         free(nal_buf);
@@ -1826,13 +1826,13 @@ static char *hevc_encoder_name[HEVC_ENCODER_COUNT] = {
 #endif
 };
 
-static int hevc_encode_picture2(uint8_t **pbuf, Image *img, 
+static int hevc_encode_picture2(uint8_t **pbuf, Image *img,
                                 HEVCEncodeParams *params,
                                 HEVCEncoderEnum encoder_type)
 {
     uint8_t *buf, *out_buf;
     int buf_len, out_buf_len;
-    
+
     switch(encoder_type) {
 #if defined(USE_JCTVC)
     case HEVC_ENCODER_JCTVC:
@@ -1887,14 +1887,14 @@ void help(int is_full)
             strcat(hevc_encoders, " ");
         strcat(hevc_encoders, hevc_encoder_name[i]);
     }
-        
+
     printf("BPG Image Encoder version " CONFIG_BPG_VERSION "\n"
            "usage: bpgenc [options] infile.[jpg|png]\n"
            "\n"
            "Main options:\n"
            "-h                   show the full help (including the advanced options)\n"
            "-o outfile           set output filename (default = %s)\n"
-           "-q qp                set quantizer parameter (smaller gives better quality,\n" 
+           "-q qp                set quantizer parameter (smaller gives better quality,\n"
            "                     range: 0-51, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
            "                     default=420)\n"
@@ -1960,7 +1960,7 @@ int main(int argc, char **argv)
     encoder_type = 0;
     limited_range = 0;
     premultiplied_alpha = 0;
-    
+
     for(;;) {
         c = getopt_long_only(argc, argv, "q:o:hf:c:vm:b:e:", long_opts, &option_index);
         if (c == -1)
@@ -2079,7 +2079,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (optind >= argc) 
+    if (optind >= argc)
         help(0);
     infilename = argv[optind];
 
@@ -2090,14 +2090,14 @@ int main(int argc, char **argv)
     }
     {
         uint8_t buf[8];
-        if (fread(buf, 1, 8, f) == 8 && 
+        if (fread(buf, 1, 8, f) == 8 &&
             png_sig_cmp(buf, 0, 8) == 0)
             is_png = 1;
         else
             is_png = 0;
         fseek(f, 0, SEEK_SET);
     }
-    
+
     if (is_png) {
         img = read_png(&md, f, color_space, bit_depth, limited_range,
                        premultiplied_alpha);
@@ -2134,7 +2134,7 @@ int main(int argc, char **argv)
         img_alpha->pixel_shift = img->pixel_shift;
         img_alpha->data[0] = img->data[c_idx];
         img_alpha->linesize[0] = img->linesize[c_idx];
-        
+
         img->data[c_idx] = NULL;
         img->has_alpha = 0;
     } else {
@@ -2169,7 +2169,7 @@ int main(int argc, char **argv)
         if (img_alpha)
             image_convert16to8(img_alpha);
     }
-        
+
     memset(p, 0, sizeof(*p));
     p->qp = qp;
     p->lossless = lossless_mode;
@@ -2226,7 +2226,7 @@ int main(int argc, char **argv)
 
         bpg_md_free(md);
     }
-    
+
     f = fopen(outfilename, "wb");
     if (!f) {
         perror(outfilename);
@@ -2236,10 +2236,10 @@ int main(int argc, char **argv)
     {
         uint8_t img_header[128], *q;
         int v, has_alpha, has_extension, alpha2_flag, alpha1_flag;
-        
+
         has_alpha = (img_alpha != NULL);
         has_extension = (extension_buf_len > 0);
-        
+
 
         if (has_alpha) {
             if (img->has_w_plane) {
@@ -2266,7 +2266,7 @@ int main(int argc, char **argv)
         *q++ = v;
         put_ue(&q, width);
         put_ue(&q, height);
-        
+
         put_ue(&q, out_buf_len);
         if (has_extension) {
             put_ue(&q, extension_buf_len); /* extension data length */

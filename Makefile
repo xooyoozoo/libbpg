@@ -1,5 +1,5 @@
 # libbpg Makefile
-# 
+#
 # Compile options:
 #
 # Enable compilation of Javascript decoder with Emscripten
@@ -109,7 +109,7 @@ ContextModel.o TComSampleAdaptiveOffset.o SEI.o TComPrediction.o\
 TComDataCU.o TComChromaFormat.o Debug.o TComRom.o\
 TComPicYuvMD5.o TComRdCost.o TComPattern.o TComCABACTables.o)
 JCTVC_OBJS+=jctvc/libmd5/libmd5.o
-JCTVC_OBJS+=jctvc/TAppEncCfg.o jctvc/TAppEncTop.o jctvc/program_options_lite.o 
+JCTVC_OBJS+=jctvc/TAppEncCfg.o jctvc/TAppEncTop.o jctvc/program_options_lite.o
 
 $(JCTVC_OBJS) jctvc_glue.o: CFLAGS+=-I$(PWD)/jctvc -Wno-sign-compare
 
@@ -129,7 +129,7 @@ ifdef CONFIG_APPLE
 LIBS:=
 else
 LIBS:=-lrt
-endif # !CONFIG_APPLE 
+endif # !CONFIG_APPLE
 LIBS+=-lm -lpthread
 endif # !CONFIG_WIN32
 
@@ -137,7 +137,7 @@ BPGENC_LIBS+=-lpng -ljpeg $(LIBS)
 
 bpgenc.o: CFLAGS+=-Wno-unused-but-set-variable
 
-libbpg.a: $(LIBBPG_OBJS) 
+libbpg.a: $(LIBBPG_OBJS)
 	$(AR) rcs $@ $^
 
 bpgdec$(EXE): bpgdec.o libbpg.a

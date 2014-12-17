@@ -1023,7 +1023,7 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
   ("SEIMasteringDisplayPrimaries",                    cfg_DisplayPrimariesCode,       cfg_DisplayPrimariesCode, "Mastering display primaries for all three colour planes in CIE xy coordinates in increments of 1/50000 (results in the ranges 0 to 50000 inclusive)")
   ("SEIMasteringDisplayWhitePoint",                   cfg_DisplayWhitePointCode,     cfg_DisplayWhitePointCode, "Mastering display white point CIE xy coordinates in normalised increments of 1/50000 (e.g. 0.333 = 16667)")
   ("Verbose",                                m_verboseLevel,                                       1, "verboseLeveL")
-    
+
   ;
 
   for(Int i=1; i<MAX_GOP+1; i++) {
@@ -1330,7 +1330,7 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
       m_masteringDisplay.whitePoint[idx] = UShort((cfg_DisplayWhitePointCode.values.size() > idx) ? cfg_DisplayWhitePointCode.values[idx] : 0);
     }
   }
-    
+
   if( m_toneMappingInfoSEIEnabled && !m_toneMapCancelFlag )
   {
     if( m_toneMapModelId == 2 && !cfg_startOfCodedInterval.values.empty() )
@@ -1568,7 +1568,7 @@ Void TAppEncCfg::xCheckParameter()
   if ( m_bufferingPeriodSEIEnabled && !m_activeParameterSetsSEIEnabled)
   {
     fprintf(stderr, "****************************************************************************\n");
-    fprintf(stderr, "** WARNING: using buffering period SEI requires SPS activation with       **\n"); 
+    fprintf(stderr, "** WARNING: using buffering period SEI requires SPS activation with       **\n");
     fprintf(stderr, "**          active parameter sets SEI. Enabling active parameter sets SEI **\n");
     fprintf(stderr, "****************************************************************************\n");
     m_activeParameterSetsSEIEnabled = 1;
@@ -1576,7 +1576,7 @@ Void TAppEncCfg::xCheckParameter()
   if ( m_pictureTimingSEIEnabled && !m_activeParameterSetsSEIEnabled)
   {
     fprintf(stderr, "****************************************************************************\n");
-    fprintf(stderr, "** WARNING: using picture timing SEI requires SPS activation with active  **\n"); 
+    fprintf(stderr, "** WARNING: using picture timing SEI requires SPS activation with active  **\n");
     fprintf(stderr, "**          parameter sets SEI. Enabling active parameter sets SEI.       **\n");
     fprintf(stderr, "****************************************************************************\n");
     m_activeParameterSetsSEIEnabled = 1;

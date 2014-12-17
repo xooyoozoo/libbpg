@@ -1,6 +1,6 @@
 /*
  * Tiny malloc
- * 
+ *
  * Copyright (c) 2014 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -129,7 +129,7 @@ void *malloc(size_t size)
         p = sbrk(MALLOC_BLOCK_SIZE * 2);
         if (p == (void *)-1)
             return NULL;
-        
+
         mem_top = sbrk(0);
         free_list.prev = free_list.next = &free_list;
         block_list.prev = block_list.next = &block_list;
@@ -225,7 +225,7 @@ void *realloc(void *ptr, size_t size)
         if (!ptr1)
             return NULL;
         /* Note: never the last block so it is valid */
-        size1 = (uint8_t *)list_entry(p->link.next, MemBlock, link) - 
+        size1 = (uint8_t *)list_entry(p->link.next, MemBlock, link) -
             p->u.data - 1;
         if (size < size1)
             size1 = size;
@@ -266,11 +266,11 @@ static void malloc_dump(void)
 {
     MemBlock *p;
     struct list_head *el;
-    
+
     printf("blocks:\n");
     for(el = block_list.next; el != &block_list; el = el->next) {
         p = list_entry(el, MemBlock, link);
-        printf("block: %p next=%p free=%d size=%u\n", p, p->link.next, 
+        printf("block: %p next=%p free=%d size=%u\n", p, p->link.next,
                get_block_state(p) == STATE_FREE,
                (unsigned int)get_block_size(p));
     }
