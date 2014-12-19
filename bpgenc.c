@@ -2083,6 +2083,7 @@ void help(int is_full)
            "Main options:\n"
            "-h                   show the full help (including the advanced options)\n"
            "-o outfile           set output filename (default = %s)\n"
+           "-s size              target x265 multipass target size in kilobytes (overrides QP control)\n"
            "-q qp                set quantizer parameter (smaller gives better quality,\n"
            "                     range: 0-51, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
@@ -2098,6 +2099,7 @@ void help(int is_full)
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
+           "-passes              number of passes when multipass encoding is enabled (1 to 5, default = 3)\n"
            "-aqstrength          set x265's AQ strength, where higher further prioritizes low effort textural areas (0.0 to 3.0, default = 1)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
            "-wpp                 splits, worsens entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
@@ -2116,6 +2118,7 @@ struct option long_opts[] = {
     { "hash", no_argument },
     { "keepmetadata", no_argument },
     { "alphaq", required_argument },
+    { "passes", required_argument },
     { "aqstrength", required_argument },
     { "deblocking", required_argument },
     { "wpp", required_argument },
@@ -2137,8 +2140,8 @@ int main(int argc, char **argv)
     FILE *f;
     int c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
     int keep_metadata, cb_size, width, height, compress_level;
-    double qp, alpha_qp, aq_strength;
-    int deblocking, wpp;
+    double size, qp, alpha_qp, aq_strength;
+    int passes, deblocking, wpp;
     int bit_depth, lossless_mode, i, limited_range, premultiplied_alpha;
     int c_h_phase;
     BPGImageFormatEnum format;
@@ -2147,9 +2150,11 @@ int main(int argc, char **argv)
     HEVCEncoderEnum encoder_type;
 
     outfilename = DEFAULT_OUTFILENAME;
+    size = -1;
     qp = DEFAULT_QP;
     alpha_qp = -1;
     aq_strength = 1.0;
+    passes = 3;
     deblocking = -1;
     wpp = 0;
     sei_decoded_picture_hash = 0;
@@ -2166,7 +2171,7 @@ int main(int argc, char **argv)
     premultiplied_alpha = 0;
 
     for(;;) {
-        c = getopt_long_only(argc, argv, "q:o:hf:c:vm:b:e:", long_opts, &option_index);
+        c = getopt_long_only(argc, argv, "s:q:o:hf:c:vm:b:e:", long_opts, &option_index);
         if (c == -1)
             break;
         switch(c) {
@@ -2186,28 +2191,32 @@ int main(int argc, char **argv)
                 }
                 break;
             case 3:
+                passes = atoi(optarg);
+                passes = passes <= 1 ? 1 : passes >= 5 ? 5 : passes;
+                break;
+            case 4:
                 aq_strength = atof(optarg);
                 aq_strength = aq_strength <= 0 ? 0.0 : aq_strength >= 3 ? 3.0 : aq_strength;
                 break;
-            case 4:
+            case 5:
                 deblocking = atoi(optarg);
                 deblocking = deblocking <= -6 ? -6 : deblocking >= 6 ? 6 : deblocking;
                 break;
-            case 5:
+            case 6:
                 wpp = atoi(optarg);
                 wpp = wpp <= 0 ? 0 : wpp >= 1 ? 1 : wpp;
                 break;
-            case 6:
+            case 7:
                 lossless_mode = 1;
                 color_space = BPG_CS_RGB;
                 format = BPG_FORMAT_444;
                 bit_depth = 8;
                 limited_range = 0;
                 break;
-            case 7:
+            case 8:
                 limited_range = 1;
                 break;
-            case 8:
+            case 9:
                 premultiplied_alpha = 1;
                 break;
             default:
@@ -2217,6 +2226,9 @@ int main(int argc, char **argv)
         case 'h':
         show_help:
             help(1);
+            break;
+        case 's':
+            size = atof(optarg);
             break;
         case 'q':
             qp = atof(optarg);
@@ -2395,12 +2407,15 @@ int main(int argc, char **argv)
     }
 
     memset(p, 0, sizeof(*p));
+    p->size = size;
     p->qp = qp;
     p->aq_strength = aq_strength;
+    p->passes = passes;
     p->deblocking = deblocking;
     if ( height > 960 || width*height > 1536000 ) {
         p->wpp = 1; // Be nice for posterity
     } else {p->wpp = wpp;}
+    p->out_name = outfilename;
     p->lossless = lossless_mode;
     p->sei_decoded_picture_hash = sei_decoded_picture_hash;
     p->compress_level = compress_level;

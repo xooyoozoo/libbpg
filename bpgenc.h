@@ -42,8 +42,11 @@ typedef struct {
 } Image;
 
 typedef struct {
+    const char *out_name;
+    double size; /* kilobytes */
     double qp; /* quantizer 0-51 */
     double aq_strength; /* 0.0-3.0 */
+    int passes; /* 1 to 5 */
     int deblocking; /* -6 to 6 */
     int wpp; /* 0 or 1 */
     int lossless; /* 0-1 lossless mode */

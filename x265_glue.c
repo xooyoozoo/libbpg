@@ -41,8 +41,15 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     int buf_len, idx, c_count, i, ret, pic_count;
     uint32_t nal_count;
     uint8_t *buf;
-    int preset_index;
+    int preset_index, multipass;
     const char *preset;
+    char *stats_name;
+
+    if ((stats_name = malloc(strlen(params->out_name) + 4 + 7 + 1)) != NULL) {
+        stats_name[0] = '\0';
+        strcat(stats_name, params->out_name);
+        strcat(stats_name, ".log");
+    } else fprintf(stderr, "Error with allocating x265 stats filename.\n");
 
     if (img->bit_depth != x265_max_bit_depth) {
         fprintf(stderr, "x265 is compiled to support only %d bit depth. Use the '-b %d' option to force the bit depth.\n",
@@ -85,20 +92,27 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         abort();
     }
     p->keyframeMax = 1; /* only I frames */
+    p->frameNumThreads = 1;
     p->internalBitDepth = img->bit_depth;
     p->bEmitInfoSEI = 0;
-    if (params->verbose)
+    if (params->verbose) {
+        p->bEnablePsnr = 1;
+        p->bEnableSsim = 1;
         p->logLevel = X265_LOG_INFO;
-    else
-        p->logLevel = X265_LOG_NONE;
+    } else p->logLevel = X265_LOG_NONE;
 
     /* dummy frame rate */
     p->fpsNum = 25;
     p->fpsDenom = 1;
     p->totalFrames = 1;
 
-    p->rc.rateControlMode = X265_RC_CRF;
-    p->rc.rfConstant = params->qp;
+    if (params->size > 0) {
+        p->rc.bitrate = 8 * params->size * p->fpsNum / p->fpsDenom;
+        p->rc.rateControlMode = X265_RC_ABR;
+    } else {
+        p->rc.rfConstant = params->qp;
+        p->rc.rateControlMode = X265_RC_CRF;
+    }
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
@@ -108,8 +122,6 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->rc.aqStrength = params->aq_strength;
 
     p->bLossless = params->lossless;
-
-    enc = x265_encoder_open(p);
 
     pic = x265_picture_alloc();
     x265_picture_init(p, pic);
@@ -125,25 +137,34 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     pic->bitDepth = img->bit_depth;
     pic->colorSpace = p->internalCsp;
 
-    pic_count = 0;
-    for(;;) {
-        if (pic_count == 0)
-            pic_in = pic;
-        else
-            pic_in = NULL;
-        ret = x265_encoder_encode(enc, &p_nal, &nal_count, pic_in, NULL);
-        if (ret < 0)
-            goto fail;
-        if (ret == 1)
-            break;
-        pic_count++;
+    multipass = (params->size > 0) ? (params->passes - 1) : 0;
+    for (i = 0; i <= multipass; i++) {
+        p->rc.statFileName = strdup(stats_name);
+        p->rc.bStatWrite = multipass;
+        p->rc.bStatRead = i;
+
+        if (i > 0) x265_encoder_close(enc);
+        enc = x265_encoder_open(p);
+
+        pic_count = 0;
+        for(;;) {
+            if (pic_count == 0)
+                pic_in = pic;
+            else
+                pic_in = NULL;
+            ret = x265_encoder_encode(enc, &p_nal, &nal_count, pic_in, NULL);
+            if (ret < 0)
+                goto fail;
+            if (ret == 1)
+                break;
+            pic_count++;
+        }
     }
 
     buf_len = 0;
     for(i = 0; i < nal_count; i++) {
         buf_len += p_nal[i].sizeBytes;
     }
-    //    printf("nal_count=%d buf_len=%d\n", nal_count, buf_len);
 
     buf = malloc(buf_len);
     idx = 0;
@@ -153,18 +174,24 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     }
 
     x265_encoder_close(enc);
-
     x265_param_free(p);
-
     x265_picture_free(pic);
+    x265_cleanup();
+
+    remove(stats_name);
+    strcat(stats_name, ".cutree");
+    remove(stats_name);
+    free(stats_name);
 
     *pbuf = buf;
     return buf_len;
  fail:
     x265_encoder_close(enc);
-
     x265_param_free(p);
     x265_picture_free(pic);
+    x265_cleanup();
+    free(stats_name);
+
     *pbuf = NULL;
     return -1;
 }
