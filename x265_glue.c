@@ -41,7 +41,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     int buf_len, idx, c_count, i, ret, pic_count;
     uint32_t nal_count;
     uint8_t *buf;
-    int preset_index, multipass;
+    int preset_index, passes;
     const char *preset;
     char *stats_name;
 
@@ -109,10 +109,14 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     if (params->size > 0) {
         p->rc.bitrate = 8 * params->size * p->fpsNum / p->fpsDenom;
         p->rc.rateControlMode = X265_RC_ABR;
+        p->bCULossless = (8 * 1024 * params->size / (img->w*img->h) >= 4);
     } else {
         p->rc.rfConstant = params->qp;
         p->rc.rateControlMode = X265_RC_CRF;
+        p->bCULossless = (params->qp <= 10);
     }
+
+    p->psyRd = p->bCULossless; /* x265 states this helps with CU-lossless decisions */
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
@@ -137,10 +141,10 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     pic->bitDepth = img->bit_depth;
     pic->colorSpace = p->internalCsp;
 
-    multipass = (params->size > 0) ? (params->passes - 1) : 0;
-    for (i = 0; i <= multipass; i++) {
+    passes = (params->size > 0) ? params->passes : 1;
+    for (i = 0; i < passes; i++) {
         p->rc.statFileName = strdup(stats_name);
-        p->rc.bStatWrite = multipass;
+        p->rc.bStatWrite = passes - i - 1;
         p->rc.bStatRead = i;
 
         if (i > 0) x265_encoder_close(enc);

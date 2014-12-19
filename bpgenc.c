@@ -2083,7 +2083,7 @@ void help(int is_full)
            "Main options:\n"
            "-h                   show the full help (including the advanced options)\n"
            "-o outfile           set output filename (default = %s)\n"
-           "-s size              target x265 multipass target size in kilobytes (overrides QP control)\n"
+           "-s size              set x265's multipass target size in kB for color planes (overrides x265 QP control)\n"
            "-q qp                set quantizer parameter (smaller gives better quality,\n"
            "                     range: 0-51, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
@@ -2099,7 +2099,7 @@ void help(int is_full)
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
-           "-passes              number of passes when multipass encoding is enabled (1 to 5, default = 3)\n"
+           "-passes              number of passes for x265's multipass size targeting (2 to 10, default = 3)\n"
            "-aqstrength          set x265's AQ strength, where higher further prioritizes low effort textural areas (0.0 to 3.0, default = 1)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
            "-wpp                 splits, worsens entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
@@ -2192,7 +2192,7 @@ int main(int argc, char **argv)
                 break;
             case 3:
                 passes = atoi(optarg);
-                passes = passes <= 1 ? 1 : passes >= 5 ? 5 : passes;
+                passes = passes <= 2 ? 2 : passes >= 10 ? 10 : passes;
                 break;
             case 4:
                 aq_strength = atof(optarg);
@@ -2229,6 +2229,10 @@ int main(int argc, char **argv)
             break;
         case 's':
             size = atof(optarg);
+            if (size < 0) {
+                fprintf(stderr, "target filesize must be greater than 0\n");
+                exit(1);
+            }
             break;
         case 'q':
             qp = atof(optarg);
