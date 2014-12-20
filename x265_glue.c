@@ -106,10 +106,13 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->fpsDenom = 1;
     p->totalFrames = 1;
 
+    p->rc.rateControlMode = X265_RC_CRF;
     if (params->size > 0) {
-        p->rc.bitrate = 8 * params->size * p->fpsNum / p->fpsDenom;
-        p->rc.rateControlMode = X265_RC_ABR;
-        p->bCULossless = (8 * 1024 * params->size / (img->w*img->h) >= 4);
+        double bpp = 8 * 1024 * params->size / (double)(img->w*img->h);
+        /* help out x265's 1st pass's terrible targeting        */
+        /* with semi-arbitrary scaling from semi-arbitrary base	*/
+        p->rc.rfConstant = 6 + 12/bpp;
+        p->bCULossless = (bpp >= 4);
     } else {
         p->rc.rfConstant = params->qp;
         p->rc.rateControlMode = X265_RC_CRF;
@@ -145,9 +148,15 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     for (i = 0; i < passes; i++) {
         p->rc.statFileName = strdup(stats_name);
         p->rc.bStatWrite = passes - i - 1;
-        p->rc.bStatRead = i;
 
-        if (i > 0) x265_encoder_close(enc);
+	    if (i == 1) {
+	        p->rc.bitrate = 8 * params->size * p->fpsNum / p->fpsDenom;
+	        p->rc.rateControlMode = X265_RC_ABR;
+            p->rc.bStatRead = 1;
+        }
+        if (i >= 1)
+	        x265_encoder_close(enc);
+
         enc = x265_encoder_open(p);
 
         pic_count = 0;

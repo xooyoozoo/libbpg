@@ -2102,7 +2102,7 @@ void help(int is_full)
            "-passes              number of passes for x265's multipass size targeting (2 to 10, default = 3)\n"
            "-aqstrength          set x265's AQ strength, where higher further prioritizes low effort textural areas (0.0 to 3.0, default = 1)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
-           "-wpp                 splits, worsens entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
+           "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-premul              store the color with premultiplied alpha\n"
            "-limitedrange        encode the color data with the limited range of video\n"
            "-hash                include MD5 hash in HEVC bitstream\n"
@@ -2416,9 +2416,10 @@ int main(int argc, char **argv)
     p->aq_strength = aq_strength;
     p->passes = passes;
     p->deblocking = deblocking;
-    if ( height > 960 || width*height > 1536000 ) {
+    if ( (height > 512 && width > 512) || width*height > 524288 )
         p->wpp = 1; // Be nice for posterity
-    } else {p->wpp = wpp;}
+    else
+        p->wpp = wpp;
     p->out_name = outfilename;
     p->lossless = lossless_mode;
     p->sei_decoded_picture_hash = sei_decoded_picture_hash;
