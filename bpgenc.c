@@ -2099,8 +2099,9 @@ void help(int is_full)
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
-           "-passes              number of passes for x265's multipass size targeting (2 to 10, default = 3)\n"
-           "-aqstrength          set x265's AQ strength, where higher further prioritizes low effort textural areas (0.0 to 3.0, default = 1)\n"
+           "-size_tol            percent precision allowance for multipass sizing (1.0 to 10.0, default = 5)\n"
+           "-max_passes          max number of x265 passes if size tolerance isn't met (2 to 10, default = 5)\n"
+           "-aq_strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas (0.0 to 3.0, default = 1)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-premul              store the color with premultiplied alpha\n"
@@ -2118,8 +2119,9 @@ struct option long_opts[] = {
     { "hash", no_argument },
     { "keepmetadata", no_argument },
     { "alphaq", required_argument },
-    { "passes", required_argument },
-    { "aqstrength", required_argument },
+    { "size_tol", required_argument },
+    { "max_passes", required_argument },
+    { "aq_strength", required_argument },
     { "deblocking", required_argument },
     { "wpp", required_argument },
     { "lossless", no_argument },
@@ -2140,8 +2142,8 @@ int main(int argc, char **argv)
     FILE *f;
     int c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
     int keep_metadata, cb_size, width, height, compress_level;
-    double size, qp, alpha_qp, aq_strength;
-    int passes, deblocking, wpp;
+    double size, size_tol, qp, alpha_qp, aq_strength;
+    int max_passes, deblocking, wpp;
     int bit_depth, lossless_mode, i, limited_range, premultiplied_alpha;
     int c_h_phase;
     BPGImageFormatEnum format;
@@ -2150,11 +2152,12 @@ int main(int argc, char **argv)
     HEVCEncoderEnum encoder_type;
 
     outfilename = DEFAULT_OUTFILENAME;
-    size = -1;
+    size = 0;
+    size_tol = 5.0;
     qp = DEFAULT_QP;
     alpha_qp = -1;
     aq_strength = 1.0;
-    passes = 3;
+    max_passes = 5;
     deblocking = -1;
     wpp = 0;
     sei_decoded_picture_hash = 0;
@@ -2191,32 +2194,36 @@ int main(int argc, char **argv)
                 }
                 break;
             case 3:
-                passes = atoi(optarg);
-                passes = passes <= 2 ? 2 : passes >= 10 ? 10 : passes;
+                size_tol = atof(optarg);
+                size_tol = size_tol <= 1 ? 1.0 : size_tol >= 10 ? 10.0 : size_tol;
                 break;
             case 4:
+                max_passes = atoi(optarg);
+                max_passes = max_passes <= 2 ? 2 : max_passes >= 10 ? 10 : max_passes;
+                break;
+            case 5:
                 aq_strength = atof(optarg);
                 aq_strength = aq_strength <= 0 ? 0.0 : aq_strength >= 3 ? 3.0 : aq_strength;
                 break;
-            case 5:
+            case 6:
                 deblocking = atoi(optarg);
                 deblocking = deblocking <= -6 ? -6 : deblocking >= 6 ? 6 : deblocking;
                 break;
-            case 6:
+            case 7:
                 wpp = atoi(optarg);
                 wpp = wpp <= 0 ? 0 : wpp >= 1 ? 1 : wpp;
                 break;
-            case 7:
+            case 8:
                 lossless_mode = 1;
                 color_space = BPG_CS_RGB;
                 format = BPG_FORMAT_444;
                 bit_depth = 8;
                 limited_range = 0;
                 break;
-            case 8:
+            case 9:
                 limited_range = 1;
                 break;
-            case 9:
+            case 10:
                 premultiplied_alpha = 1;
                 break;
             default:
@@ -2229,7 +2236,7 @@ int main(int argc, char **argv)
             break;
         case 's':
             size = atof(optarg);
-            if (size < 0) {
+            if (size <= 0) {
                 fprintf(stderr, "target filesize must be greater than 0\n");
                 exit(1);
             }
@@ -2412,11 +2419,12 @@ int main(int argc, char **argv)
 
     memset(p, 0, sizeof(*p));
     p->size = size;
+    p->size_tol = size_tol;
     p->qp = qp;
     p->aq_strength = aq_strength;
-    p->passes = passes;
+    p->max_passes = max_passes;
     p->deblocking = deblocking;
-    if ( (height > 512 && width > 512) || width*height > 524288 )
+    if ( (height > 512 && width > 512) || width*height > 262144 )
         p->wpp = 1; // Be nice for posterity
     else
         p->wpp = wpp;

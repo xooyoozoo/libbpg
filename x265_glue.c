@@ -25,11 +25,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <math.h>
 #include <unistd.h>
 
 #include "bpgenc.h"
 
 #include "x265.h"
+
+#define X265_DIF -24 // x265 stats interal byte difference vs encoded stream
+#define BPG_DIF -61  // BPG output size diffrence vs encoded stream
 
 int x265_encode_picture(uint8_t **pbuf, Image *img,
                         const HEVCEncodeParams *params)
@@ -38,10 +42,11 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     x265_param *p;
     x265_picture *pic, *pic_in;
     x265_nal *p_nal;
-    int buf_len, idx, c_count, i, ret, pic_count;
+    int buf_len, idx, c_count, i, j, ret, pic_count;
     uint32_t nal_count;
     uint8_t *buf;
     int preset_index, passes;
+    double bpp, bytes_tar, bytes_tol;
     const char *preset;
     char *stats_name;
 
@@ -108,18 +113,21 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->rc.rateControlMode = X265_RC_CRF;
     if (params->size > 0) {
-        double bpp = 8 * 1024 * params->size / (double)(img->w*img->h);
-        /* help out x265's 1st pass's terrible targeting        */
-        /* with semi-arbitrary scaling from semi-arbitrary base	*/
-        p->rc.rfConstant = 6 + 12/bpp;
+        bytes_tar = params->size * 1000;
+        bytes_tol = bytes_tar * params->size_tol / 100;
+
+        bpp = 8 * bytes_tar / (double)(img->w*img->h);
         p->bCULossless = (bpp >= 4);
+        /* help out x265's 1st pass's terrible targeting            */
+        /* with semi-arbitrary scaling from semi-arbitrary base     */
+        p->rc.rfConstant = 4 + 12/bpp;
     } else {
         p->rc.rfConstant = params->qp;
         p->rc.rateControlMode = X265_RC_CRF;
         p->bCULossless = (params->qp <= 10);
     }
 
-    p->psyRd = p->bCULossless; /* x265 states this helps with CU-lossless decisions */
+    p->psyRd = p->bCULossless; /* x265 states this aids CU-lossless decisions */
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
@@ -144,21 +152,12 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     pic->bitDepth = img->bit_depth;
     pic->colorSpace = p->internalCsp;
 
-    passes = (params->size > 0) ? params->passes : 1;
+    passes = (params->size > 0) ? params->max_passes : 1;
     for (i = 0; i < passes; i++) {
         p->rc.statFileName = strdup(stats_name);
         p->rc.bStatWrite = passes - i - 1;
 
-	    if (i == 1) {
-	        p->rc.bitrate = 8 * params->size * p->fpsNum / p->fpsDenom;
-	        p->rc.rateControlMode = X265_RC_ABR;
-            p->rc.bStatRead = 1;
-        }
-        if (i >= 1)
-	        x265_encoder_close(enc);
-
         enc = x265_encoder_open(p);
-
         pic_count = 0;
         for(;;) {
             if (pic_count == 0)
@@ -172,11 +171,23 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
                 break;
             pic_count++;
         }
-    }
 
-    buf_len = 0;
-    for(i = 0; i < nal_count; i++) {
-        buf_len += p_nal[i].sizeBytes;
+        buf_len = 0;
+        for(j = 0; j < nal_count; j++)
+            buf_len += p_nal[j].sizeBytes;
+
+        p->rc.bitrate = (params->size + (X265_DIF - BPG_DIF)/1000.0)
+                        * 8 * p->fpsNum/p->fpsDenom;
+        p->rc.rateControlMode = X265_RC_ABR;
+        p->rc.bStatRead = 1;
+
+        x265_encoder_close(enc);
+
+        if (i > 0) {
+            // early exit if BPG output can be within tolerance
+            if (fabs(buf_len + BPG_DIF - bytes_tar) <= bytes_tol)
+                break;
+        }
     }
 
     buf = malloc(buf_len);
@@ -186,7 +197,6 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         idx += p_nal[i].sizeBytes;
     }
 
-    x265_encoder_close(enc);
     x265_param_free(p);
     x265_picture_free(pic);
     x265_cleanup();

@@ -43,10 +43,11 @@ typedef struct {
 
 typedef struct {
     const char *out_name;
-    double size; /* kilobytes */
+    double size; /* 1000s of bytes */
+    double size_tol; /* 1.0 to 10.0 */
     double qp; /* quantizer 0-51 */
-    double aq_strength; /* 0.0-3.0 */
-    int passes; /* 1 to 5 */
+    double aq_strength; /* 0.0 to 3.0 */
+    int max_passes; /* 2 to 10 */
     int deblocking; /* -6 to 6 */
     int wpp; /* 0 or 1 */
     int lossless; /* 0-1 lossless mode */
