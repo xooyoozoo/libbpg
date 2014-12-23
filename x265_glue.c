@@ -32,8 +32,8 @@
 
 #include "x265.h"
 
-#define X265_DIF -24 // x265 stats interal byte difference vs encoded stream
-#define BPG_DIF -61  // BPG output size diffrence vs encoded stream
+#define X265_DIF    (-24)   // x265 stats interal byte difference vs encoded stream
+#define BPG_DIF     (-61)   // BPG output size diffrence vs encoded stream
 
 int x265_encode_picture(uint8_t **pbuf, Image *img,
                         const HEVCEncodeParams *params)
@@ -101,8 +101,6 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->internalBitDepth = img->bit_depth;
     p->bEmitInfoSEI = 0;
     if (params->verbose) {
-        p->bEnablePsnr = 1;
-        p->bEnableSsim = 1;
         p->logLevel = X265_LOG_INFO;
     } else p->logLevel = X265_LOG_NONE;
 
@@ -120,7 +118,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         p->bCULossless = (bpp >= 4);
         /* help out x265's 1st pass's terrible targeting            */
         /* with semi-arbitrary scaling from semi-arbitrary base     */
-        p->rc.rfConstant = 4 + 12/bpp;
+        p->rc.rfConstant = 5 + 10/bpp;
     } else {
         p->rc.rfConstant = params->qp;
         p->rc.rateControlMode = X265_RC_CRF;
@@ -131,11 +129,13 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
-    p->bEnableWavefront = params->wpp;
+    p->cbQpOffset = params->chroma_offset;
+    p->crQpOffset = params->chroma_offset;
 
     p->rc.aqMode = X265_AQ_VARIANCE;
     p->rc.aqStrength = params->aq_strength;
 
+    p->bEnableWavefront = params->wpp;
     p->bLossless = params->lossless;
 
     pic = x265_picture_alloc();

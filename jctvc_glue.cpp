@@ -102,6 +102,12 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     snprintf(buf, sizeof(buf),"--LoopFilterTcOffset_div2=%d", params->deblocking);
     add_opt(&argc, argv, buf);
 
+    snprintf(buf, sizeof(buf),"--CbQpOffset=%d", params->chroma_offset);
+    add_opt(&argc, argv, buf);
+
+    snprintf(buf, sizeof(buf),"--CrQpOffset=%d", params->chroma_offset);
+    add_opt(&argc, argv, buf);
+
     snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
     add_opt(&argc, argv, buf);
 
