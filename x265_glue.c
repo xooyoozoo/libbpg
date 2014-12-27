@@ -32,9 +32,6 @@
 
 #include "x265.h"
 
-#define X265_DIF    (-24)   // x265 stats interal byte difference vs encoded stream
-#define BPG_DIF     (-61)   // BPG output size diffrence vs encoded stream
-
 int x265_encode_picture(uint8_t **pbuf, Image *img,
                         const HEVCEncodeParams *params)
 {
@@ -116,15 +113,17 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
         bpp = 8 * bytes_tar / (double)(img->w*img->h);
         p->bCULossless = (bpp >= 4);
-        /* help out x265's 1st pass's terrible targeting            */
-        /* with semi-arbitrary scaling from semi-arbitrary base     */
-        if (params->qp == 0)
+        /* aid x265's 1st pass with arbitrary scaling from arbitrary base
+           unless qp is manually set */
+        if (params->qp <= 0)
             p->rc.rfConstant = (bpp > 0.3) ? 5 + 10/bpp : 38;
         else
             p->rc.rfConstant = params->qp;
+
+        /* if in size_limit mode, first pass a legitimate encode */
+        p->rc.bEnableSlowFirstPass = params->size_limit;
     } else {
         p->rc.rfConstant = params->qp;
-        p->rc.rateControlMode = X265_RC_CRF;
         p->bCULossless = (params->qp <= 10);
     }
 
@@ -182,15 +181,18 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
             buf_len += p_nal[j].sizeBytes;
 
         if (i == 0) {
-            p->rc.bitrate = (params->size + (X265_DIF - BPG_DIF)/1000.0)
-                            * 8 * p->fpsNum/p->fpsDenom;
+            // early exit if 1st pass output smaller than limit
+            if (params->size_limit && buf_len <= bytes_tar)
+                break;
+
+            p->rc.bitrate = params->size * 8 * p->fpsNum/p->fpsDenom;
             p->rc.rateControlMode = X265_RC_ABR;
             p->rc.bStatRead = 1;
         }
 
         if (i > 0) {
             // early exit if BPG output can be within tolerance
-            if (fabs(buf_len + BPG_DIF - bytes_tar) <= bytes_tol)
+            if (fabs(buf_len - bytes_tar) <= bytes_tol)
                 break;
         }
     }

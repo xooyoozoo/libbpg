@@ -2083,13 +2083,14 @@ void help(int is_full)
            "Main options:\n"
            "-h                   show the full help (including the advanced options)\n"
            "-o outfile           set output filename (default = %s)\n"
-           "-s size              set x265's multipass target size in kB for color planes (overrides x265 QP control)\n"
+           "-s size              set x265's multipass target size in kB for color planes (overrides x265 qp control,\n"
+           "                         can use qp value as a starting point)\n"
            "-q qp                set quantizer parameter (smaller gives better quality,\n"
-           "                     range: 0-51, default = %d)\n"
+           "                         range: 0-51, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
-           "                     default=420)\n"
+           "                         default=420)\n"
            "-c color_space       set the preferred color space (ycbcr, rgb, ycgco,\n"
-           "                     ycbcr_bt709, ycbcr_bt2020, default=ycbcr)\n"
+           "                         ycbcr_bt709, ycbcr_bt2020, default=ycbcr)\n"
            "-b bit_depth         set the bit depth (8 to %d, default = %d)\n"
            "-lossless            enable lossless mode\n"
            "-e encoder           select the HEVC encoder (%s, default = %s)\n"
@@ -2098,6 +2099,8 @@ void help(int is_full)
            hevc_encoders, hevc_encoder_name[0], DEFAULT_COMPRESS_LEVEL);
     if (is_full) {
         printf("\nAdvanced options:\n"
+           "-size_limit          uses size setting as a cap: first encode in normal qp/crf mode,\n"
+           "                         switches to normal multipass if size is larger than max\n"
            "-size_tol            percent precision allowance for multipass sizing (1.0 to 10.0, default = 5)\n"
            "-passes              max number of x265 passes if size tolerance isn't met (2 to 10, default = 5)\n"
            "-aq_strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas (0.0 to 3.0, default = 1)\n"
@@ -2123,6 +2126,7 @@ struct option long_opts[] = {
     { "lossless", no_argument },
     { "limitedrange", no_argument },
     { "premul", no_argument },
+    { "size_limit", no_argument },
     { "size_tol", required_argument },
     { "passes", required_argument },
     { "aq_strength", required_argument },
@@ -2145,7 +2149,7 @@ int main(int argc, char **argv)
     int c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
     int keep_metadata, cb_size, width, height, compress_level;
     double size, size_tol, qp, alpha_qp, aq_strength;
-    int passes, chroma_offset, deblocking, wpp;
+    int size_limit, passes, chroma_offset, deblocking, wpp;
     int bit_depth, lossless_mode, i, limited_range, premultiplied_alpha;
     int c_h_phase;
     BPGImageFormatEnum format;
@@ -2154,7 +2158,8 @@ int main(int argc, char **argv)
     HEVCEncoderEnum encoder_type;
 
     outfilename = DEFAULT_OUTFILENAME;
-    size = 0;
+    size = -1;
+    size_limit = 0;
     size_tol = 5.0;
     passes = 5;
     aq_strength = 1.0;
@@ -2210,26 +2215,29 @@ int main(int argc, char **argv)
                 premultiplied_alpha = 1;
                 break;
             case 6:
+                size_limit = 1;
+                break;
+            case 7:
                 size_tol = atof(optarg);
                 size_tol = size_tol <= 1 ? 1.0 : size_tol >= 10 ? 10.0 : size_tol;
                 break;
-            case 7:
+            case 8:
                 passes = atoi(optarg);
                 passes = passes <= 2 ? 2 : passes >= 10 ? 10 : passes;
                 break;
-            case 8:
+            case 9:
                 aq_strength = atof(optarg);
                 aq_strength = aq_strength <= 0 ? 0.0 : aq_strength >= 3 ? 3.0 : aq_strength;
                 break;
-            case 9:
+            case 10:
                 chroma_offset = atoi(optarg);
                 chroma_offset = chroma_offset <= -12 ? -12 : chroma_offset >= 12 ? 12 : chroma_offset;
                 break;
-            case 10:
+            case 11:
                 deblocking = atoi(optarg);
                 deblocking = deblocking <= -6 ? -6 : deblocking >= 6 ? 6 : deblocking;
                 break;
-            case 11:
+            case 12:
                 wpp = atoi(optarg);
                 wpp = wpp <= 0 ? 0 : wpp >= 1 ? 1 : wpp;
                 break;
@@ -2424,10 +2432,19 @@ int main(int argc, char **argv)
             image_convert16to8(img_alpha);
     }
 
-    memset(p, 0, sizeof(*p));
-    if (size > 0 && encoder_type != 1)
+    if (size > 0 && encoder_type != 1) {
         fprintf(stderr, "Must use x265 encoder when using multipass\n");
+        exit(1);
+    }
+    if (size_limit == 1 && (qp < 0 || size <= 0)) {
+        fprintf(stderr, "Must choose initial QP/CRF and size alongside size_limit\n");
+        exit(1);
+    }
+
+    memset(p, 0, sizeof(*p));
+
     p->size = size;
+    p->size_limit = size_limit;
     p->size_tol = size_tol;
     p->passes = passes;
     p->aq_strength = aq_strength;
@@ -2460,8 +2477,10 @@ int main(int argc, char **argv)
     alpha_buf = NULL;
     alpha_buf_len = 0;
     if (img_alpha) {
-        if (alpha_qp < 0 && size > 0)
+        if (alpha_qp < 0 && size > 0) {
             fprintf(stderr, "Must set alpha_qp alongside with color-planes's size\n");
+            exit(1);
+        }
 
         memset(p, 0, sizeof(*p));
         if (alpha_qp < 0)
