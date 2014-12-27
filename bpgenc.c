@@ -2099,7 +2099,7 @@ void help(int is_full)
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-size_tol            percent precision allowance for multipass sizing (1.0 to 10.0, default = 5)\n"
-           "-max_passes          max number of x265 passes if size tolerance isn't met (2 to 10, default = 5)\n"
+           "-passes              max number of x265 passes if size tolerance isn't met (2 to 10, default = 5)\n"
            "-aq_strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas (0.0 to 3.0, default = 1)\n"
            "-chroma_offset       qp offset for 2nd and 3rd components (-12 to 12, default = 0)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
@@ -2124,7 +2124,7 @@ struct option long_opts[] = {
     { "limitedrange", no_argument },
     { "premul", no_argument },
     { "size_tol", required_argument },
-    { "max_passes", required_argument },
+    { "passes", required_argument },
     { "aq_strength", required_argument },
     { "chroma_offset", required_argument },
     { "deblocking", required_argument },
@@ -2145,7 +2145,7 @@ int main(int argc, char **argv)
     int c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
     int keep_metadata, cb_size, width, height, compress_level;
     double size, size_tol, qp, alpha_qp, aq_strength;
-    int max_passes, chroma_offset, deblocking, wpp;
+    int passes, chroma_offset, deblocking, wpp;
     int bit_depth, lossless_mode, i, limited_range, premultiplied_alpha;
     int c_h_phase;
     BPGImageFormatEnum format;
@@ -2156,12 +2156,12 @@ int main(int argc, char **argv)
     outfilename = DEFAULT_OUTFILENAME;
     size = 0;
     size_tol = 5.0;
-    max_passes = 5;
+    passes = 5;
     aq_strength = 1.0;
     chroma_offset = 0;
     deblocking = -1;
     wpp = 0;
-    qp = DEFAULT_QP;
+    qp = -1;
     alpha_qp = -1;
     sei_decoded_picture_hash = 0;
     format = BPG_FORMAT_420;
@@ -2214,8 +2214,8 @@ int main(int argc, char **argv)
                 size_tol = size_tol <= 1 ? 1.0 : size_tol >= 10 ? 10.0 : size_tol;
                 break;
             case 7:
-                max_passes = atoi(optarg);
-                max_passes = max_passes <= 2 ? 2 : max_passes >= 10 ? 10 : max_passes;
+                passes = atoi(optarg);
+                passes = passes <= 2 ? 2 : passes >= 10 ? 10 : passes;
                 break;
             case 8:
                 aq_strength = atof(optarg);
@@ -2425,17 +2425,27 @@ int main(int argc, char **argv)
     }
 
     memset(p, 0, sizeof(*p));
+    if (size > 0 && encoder_type != 1)
+        fprintf(stderr, "Must use x265 encoder when using multipass\n");
     p->size = size;
     p->size_tol = size_tol;
-    p->max_passes = max_passes;
+    p->passes = passes;
     p->aq_strength = aq_strength;
     p->chroma_offset = chroma_offset;
     p->deblocking = deblocking;
+
     if ( (height > 512 && width > 512) || width*height > 262144 )
-        p->wpp = 1; // Be nice for posterity
+         p->wpp = 1; // Be nice for posterity
     else
         p->wpp = wpp;
-    p->qp = qp;
+
+    /* User QP/CRF, default QP/CRF for 1-pass,
+       or (naive) auto-CRF for 1st pass of multipass */
+    if (qp >= 0)
+        p->qp = qp;
+    else
+        p->qp = (size > 0) ? 0 : DEFAULT_QP;
+
     p->out_name = outfilename;
     p->lossless = lossless_mode;
     p->sei_decoded_picture_hash = sei_decoded_picture_hash;
@@ -2450,6 +2460,9 @@ int main(int argc, char **argv)
     alpha_buf = NULL;
     alpha_buf_len = 0;
     if (img_alpha) {
+        if (alpha_qp < 0 && size > 0)
+            fprintf(stderr, "Must set alpha_qp alongside with color-planes's size\n");
+
         memset(p, 0, sizeof(*p));
         if (alpha_qp < 0)
             p->qp = qp;

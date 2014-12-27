@@ -118,7 +118,10 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         p->bCULossless = (bpp >= 4);
         /* help out x265's 1st pass's terrible targeting            */
         /* with semi-arbitrary scaling from semi-arbitrary base     */
-        p->rc.rfConstant = 5 + 10/bpp;
+        if (params->qp == 0)
+            p->rc.rfConstant = (bpp > 0.3) ? 5 + 10/bpp : 38;
+        else
+            p->rc.rfConstant = params->qp;
     } else {
         p->rc.rfConstant = params->qp;
         p->rc.rateControlMode = X265_RC_CRF;
@@ -152,12 +155,14 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     pic->bitDepth = img->bit_depth;
     pic->colorSpace = p->internalCsp;
 
-    passes = (params->size > 0) ? params->max_passes : 1;
+    passes = (params->size > 0) ? params->passes : 1;
     for (i = 0; i < passes; i++) {
         p->rc.statFileName = strdup(stats_name);
         p->rc.bStatWrite = passes - i - 1;
 
+        if (i > 0) x265_encoder_close(enc);
         enc = x265_encoder_open(p);
+
         pic_count = 0;
         for(;;) {
             if (pic_count == 0)
@@ -176,12 +181,12 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         for(j = 0; j < nal_count; j++)
             buf_len += p_nal[j].sizeBytes;
 
-        p->rc.bitrate = (params->size + (X265_DIF - BPG_DIF)/1000.0)
-                        * 8 * p->fpsNum/p->fpsDenom;
-        p->rc.rateControlMode = X265_RC_ABR;
-        p->rc.bStatRead = 1;
-
-        x265_encoder_close(enc);
+        if (i == 0) {
+            p->rc.bitrate = (params->size + (X265_DIF - BPG_DIF)/1000.0)
+                            * 8 * p->fpsNum/p->fpsDenom;
+            p->rc.rateControlMode = X265_RC_ABR;
+            p->rc.bStatRead = 1;
+        }
 
         if (i > 0) {
             // early exit if BPG output can be within tolerance
@@ -197,6 +202,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         idx += p_nal[i].sizeBytes;
     }
 
+    x265_encoder_close(enc);
     x265_param_free(p);
     x265_picture_free(pic);
     x265_cleanup();
