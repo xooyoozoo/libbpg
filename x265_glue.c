@@ -98,6 +98,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->internalBitDepth = img->bit_depth;
     p->bEmitInfoSEI = 0;
     if (params->verbose) {
+        p->bEnablePsnr = 1;
         p->logLevel = X265_LOG_INFO;
     } else p->logLevel = X265_LOG_NONE;
 

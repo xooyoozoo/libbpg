@@ -2083,10 +2083,10 @@ void help(int is_full)
            "Main options:\n"
            "-h                   show the full help (including the advanced options)\n"
            "-o outfile           set output filename (default = %s)\n"
-           "-s size              set x265's multipass target size in kB for color planes (overrides x265 qp control,\n"
-           "                         can use qp value as a starting point)\n"
-           "-q qp                set quantizer parameter (smaller gives better quality,\n"
-           "                         range: 0-51, default = %d)\n"
+           "-s size              set x265's multipass sizing in kB for color planes\n"
+           "                         (overrides x265 quality control, can use q as a starting point)\n"
+           "-q quality           set quality/quantization (smaller gives better quality,\n"
+           "                         range: 0-51.0, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
            "                         default=420)\n"
            "-c color_space       set the preferred color space (ycbcr, rgb, ycgco,\n"
@@ -2103,7 +2103,8 @@ void help(int is_full)
            "                         switches to normal multipass if size is larger than max\n"
            "-size_tol            percent precision allowance for multipass sizing (1.0 to 10.0, default = 5)\n"
            "-passes              max number of x265 passes if size tolerance isn't met (2 to 10, default = 5)\n"
-           "-aq_strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas (0.0 to 3.0, default = 1)\n"
+           "-aq_strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas\n"
+           "                         (0.0 to 3.0, default = 1)\n"
            "-chroma_offset       qp offset for 2nd and 3rd components (-12 to 12, default = 0)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
@@ -2432,6 +2433,11 @@ int main(int argc, char **argv)
             image_convert16to8(img_alpha);
     }
 
+    if (img_alpha && encoder_type != 0) {
+        fprintf(stderr, "x265 doesn't support 4th plane, and we can't (yet) mix encoders\n");
+        exit(1);
+    }
+
     if (size > 0 && encoder_type != 1) {
         fprintf(stderr, "Must use x265 encoder when using multipass\n");
         exit(1);
@@ -2477,11 +2483,6 @@ int main(int argc, char **argv)
     alpha_buf = NULL;
     alpha_buf_len = 0;
     if (img_alpha) {
-        if (alpha_qp < 0 && size > 0) {
-            fprintf(stderr, "Must set alpha_qp alongside with color-planes's size\n");
-            exit(1);
-        }
-
         memset(p, 0, sizeof(*p));
         if (alpha_qp < 0)
             p->qp = qp;
