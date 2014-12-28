@@ -108,9 +108,6 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     snprintf(buf, sizeof(buf),"--CrQpOffset=%d", params->chroma_offset);
     add_opt(&argc, argv, buf);
 
-    snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
-    add_opt(&argc, argv, buf);
-
     snprintf(buf, sizeof(buf),"--SEIDecodedPictureHash=%d",
              params->sei_decoded_picture_hash);
     add_opt(&argc, argv, buf);
@@ -138,13 +135,23 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     add_opt(&argc, argv, "--TransformSkip=1");
     add_opt(&argc, argv, "--TransformSkipFast=1");
 
-    /* Class F (YUV420 gaming/screen/text content) benefits slightly here */
+    /* current libav(?) problem with some RExt Tools and WPP */
+    if (params->compress_level <= 7 && !params->lossless) {
+        snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
+        add_opt(&argc, argv, buf);
+    }
+
+    /* Class F (YUV420 gaming/screen/text content) benefits without any speed change */
     if (params->compress_level >= 8) {
-        add_opt(&argc, argv, "--TransformSkipLog2MaxSize=5");
         add_opt(&argc, argv, "--ResidualRotation");
         add_opt(&argc, argv, "--SingleSignificanceMapContext");
         add_opt(&argc, argv, "--ImplicitResidualDPCM");
         add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
+    }
+    /* Class F still benefits, but turning off TSkipFast make things slower */
+    if (params->compress_level >= 9) {
+        add_opt(&argc, argv, "--TransformSkipLog2MaxSize=5");
+        add_opt(&argc, argv, "--TransformSkipFast=0");
     }
 
     /* Note: Format Range extension */
