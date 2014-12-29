@@ -2099,13 +2099,13 @@ void help(int is_full)
            hevc_encoders, hevc_encoder_name[0], DEFAULT_COMPRESS_LEVEL);
     if (is_full) {
         printf("\nAdvanced options:\n"
-           "-size_limit          uses size setting as a cap: first encode in normal qp/crf mode,\n"
+           "-size-limit          uses size setting as a cap: first encode in normal qp/crf mode,\n"
            "                         switches to normal multipass if size is larger than max\n"
-           "-size_tol            percent precision allowance for multipass sizing (1.0 to 10.0, default = 5)\n"
+           "-size-tol            percent precision allowance for multipass sizing (1.0 to 10.0, default = 5)\n"
            "-passes              max number of x265 passes if size tolerance isn't met (2 to 10, default = 5)\n"
-           "-aq_strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas\n"
+           "-aq-strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas\n"
            "                         (0.0 to 3.0, default = 1)\n"
-           "-chroma_offset       qp offset for 2nd and 3rd components (-12 to 12, default = 0)\n"
+           "-chroma-offset       qp offset for 2nd and 3rd components (-12 to 12, default = 0)\n"
            "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
@@ -2127,11 +2127,11 @@ struct option long_opts[] = {
     { "lossless", no_argument },
     { "limitedrange", no_argument },
     { "premul", no_argument },
-    { "size_limit", no_argument },
-    { "size_tol", required_argument },
+    { "size-limit", no_argument },
+    { "size-tol", required_argument },
     { "passes", required_argument },
-    { "aq_strength", required_argument },
-    { "chroma_offset", required_argument },
+    { "aq-strength", required_argument },
+    { "chroma-offset", required_argument },
     { "deblocking", required_argument },
     { "wpp", required_argument },
     { NULL },
@@ -2425,6 +2425,9 @@ int main(int argc, char **argv)
     if (img_alpha)
         image_pad(img_alpha, cb_size);
 
+    /* WPP benefits most/all future deocders. Auto-on if img not small. */
+    wpp = ( (height>512 && width>512) || width*height>262144 ) ? 1 : wpp;
+
     /* convert to the allocated pixel width to 8 bit if needed by the
        HEVC encoder */
     if (img->bit_depth == 8) {
@@ -2432,11 +2435,6 @@ int main(int argc, char **argv)
         if (img_alpha)
             image_convert16to8(img_alpha);
     }
-
-    /*if (img_alpha && encoder_type == HEVC_ENCODER_X265) {
-        fprintf(stderr, "x265 doesn't support 4th plane, and we can't (yet) mix encoders\n");
-        exit(1);
-    }*/
 
     if (size > 0 && encoder_type != HEVC_ENCODER_X265) {
         fprintf(stderr, "Must use x265 encoder when using multipass\n");
@@ -2449,6 +2447,13 @@ int main(int argc, char **argv)
 
     memset(p, 0, sizeof(*p));
 
+    /* User QP/CRF, default QP/CRF for 1-pass,
+       or (naive) auto-CRF for 1st pass of multipass */
+    if (qp >= 0)
+        p->qp = qp;
+    else
+        p->qp = (size > 0) ? 0 : DEFAULT_QP - 6*(encoder_type == HEVC_ENCODER_X265);
+
     p->size = size;
     p->size_limit = size_limit;
     p->size_tol = size_tol;
@@ -2456,18 +2461,7 @@ int main(int argc, char **argv)
     p->aq_strength = aq_strength;
     p->chroma_offset = chroma_offset;
     p->deblocking = deblocking;
-
-    if ( (height > 512 && width > 512) || width*height > 262144 )
-         p->wpp = 1; // Be nice for posterity
-    else
-        p->wpp = wpp;
-
-    /* User QP/CRF, default QP/CRF for 1-pass,
-       or (naive) auto-CRF for 1st pass of multipass */
-    if (qp >= 0)
-        p->qp = qp;
-    else
-        p->qp = (size > 0) ? 0 : DEFAULT_QP - 6*(encoder_type == HEVC_ENCODER_X265);
+    p->wpp = wpp;
 
     p->out_name = outfilename;
     p->lossless = lossless_mode;
@@ -2495,6 +2489,8 @@ int main(int argc, char **argv)
         } else {
             p->qp = alpha_qp;
         }
+        p->deblocking = deblocking;
+        p->wpp = wpp;
         p->lossless = lossless_mode;
         p->sei_decoded_picture_hash = sei_decoded_picture_hash;
         p->compress_level = compress_level;

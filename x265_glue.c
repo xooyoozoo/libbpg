@@ -109,8 +109,8 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->rc.rateControlMode = X265_RC_CRF;
     if (params->size > 0) {
-        bytes_tar = params->size * 1000;
-        bytes_tol = bytes_tar * params->size_tol / 100;
+        bytes_tar = params->size * 1000.0;
+        bytes_tol = bytes_tar * params->size_tol / 100.0;
 
         bpp = 8 * bytes_tar / (double)(img->w*img->h);
         p->bCULossless = (bpp >= 4);
@@ -201,6 +201,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     buf = malloc(buf_len);
     idx = 0;
     for(i = 0; i < nal_count; i++) {
+        /* ignore NAL_UNIT_PREFIX_SEI */
         if (p_nal[i].type != 39)
             memcpy(buf + idx, p_nal[i].payload, p_nal[i].sizeBytes);
         idx += p_nal[i].sizeBytes;
