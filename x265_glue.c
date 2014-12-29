@@ -42,12 +42,12 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     int buf_len, idx, c_count, i, j, ret, pic_count;
     uint32_t nal_count;
     uint8_t *buf;
-    int preset_index, passes;
+    int preset_index, passes, last_enc_size;
     double bpp, bytes_tar, bytes_tol;
     const char *preset;
     char *stats_name;
 
-    if ((stats_name = malloc(strlen(params->out_name) + 4 + 7 + 1)) != NULL) {
+    if ((stats_name = malloc(strlen(params->out_name) + 4 + 1)) != NULL) {
         stats_name[0] = '\0';
         strcat(stats_name, params->out_name);
         strcat(stats_name, ".log");
@@ -135,8 +135,11 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
-    p->cbQpOffset = params->chroma_offset;
-    p->crQpOffset = params->chroma_offset;
+
+    /* Chroma offset also accounts for psyRd.
+       x264 does this internally, but x265 doesn't seem to do so (?) */
+    p->cbQpOffset = params->chroma_offset - (int)(0.5 + p->psyRd);
+    p->crQpOffset = p->cbQpOffset;
 
     p->rc.aqMode = X265_AQ_VARIANCE;
     p->rc.aqStrength = params->aq_strength;
@@ -195,12 +198,23 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
             p->rc.bitrate = params->size * 8 * p->fpsNum/p->fpsDenom;
             p->rc.rateControlMode = X265_RC_ABR;
             p->rc.bStatRead = 1;
+            last_enc_size = 0;
         }
 
         if (i > 0) {
+            // early exit if multipass is not adjusting output
+            if (fabs(buf_len - last_enc_size) < 1) {
+                fprintf(stderr, "Multipass was %.2lf%% off target size (%d kB)\n",
+                       100 * (buf_len - bytes_tar)/bytes_tar, (int)params->size);
+                break;
+            }
+            last_enc_size = buf_len;
             // early exit if BPG output can be within tolerance
             if (fabs(buf_len - bytes_tar) <= bytes_tol)
                 break;
+            else if (i == passes - 1)
+                fprintf(stderr, "Multipass was %.2lf%% off target size (%d kB)\n",
+                       100 * (buf_len - bytes_tar)/bytes_tar, (int)params->size);
         }
     }
 
@@ -218,8 +232,6 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     x265_picture_free(pic);
     x265_cleanup();
 
-    remove(stats_name);
-    strcat(stats_name, ".cutree");
     remove(stats_name);
     free(stats_name);
 
