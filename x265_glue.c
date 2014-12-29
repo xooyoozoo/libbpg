@@ -141,6 +141,9 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->rc.aqMode = X265_AQ_VARIANCE;
     p->rc.aqStrength = params->aq_strength;
 
+    p->rc.cuTree = 0;   /* doesn't do anything for all-intra */
+    p->bEnableSAO = 1;  /* getting base qp from header becomes more simple */
+
     p->bEnableWavefront = params->wpp;
     p->bLossless = params->lossless;
 

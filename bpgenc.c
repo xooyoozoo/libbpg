@@ -1624,6 +1624,99 @@ static int dyn_buf_resize(DynBuf *s, int size)
     return 0;
 }
 
+static inline int u_to_e_golomb(uint32_t ueg)
+{
+    if (ueg % 2 == 0)
+        return -1 * (ueg / 2);
+    else
+        return (ueg + 1) / 2;
+}
+
+/* Base QP used for deciding JCTVC alpha QP after x265 multipass */
+static int get_pic_base_qp(const uint8_t *buf, int buf_len)
+{
+    int nal_unit_type, nal_len, idx, i, ret;
+    int output_flag_present_flag, num_extra_slice_header_bits;
+    int init_qp_minus26, slice_qp_delta;
+    uint8_t *nal_buf;
+    GetBitState gb_s, *gb = &gb_s;
+
+    /* VPS NAL */
+    idx = extract_nal(&nal_buf, &nal_len, buf, buf_len);
+    /* SPS NAL */
+    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    idx += ret;
+    /* PPS NAL */
+    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    idx += ret;
+    nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
+
+    if (nal_unit_type != 34) {
+        free(nal_buf);
+        fprintf(stderr, "expecting PPS nal (%d)\n", nal_unit_type);
+        return -1;
+    }
+    {
+        init_get_bits(gb, nal_buf, nal_len);
+        skip_bits(gb, 16);  // nal header
+
+        get_ue_golomb(gb);
+        get_ue_golomb(gb);
+        skip_bits(gb, 1);   //dependent_slice_segments_enabled_flag
+        output_flag_present_flag = get_bits(gb, 1);
+        num_extra_slice_header_bits = get_bits(gb, 3);
+        skip_bits(gb, 1);   //sign_data_hiding_enabled_flag
+        skip_bits(gb, 1);   //cabac_init_present_flag
+        get_ue_golomb(gb);  //num_ref_idx_l0_default_active_minus1
+        get_ue_golomb(gb);  //num_ref_idx_l1_default_active_minus1
+        init_qp_minus26 = u_to_e_golomb(get_ue_golomb(gb));
+    }
+
+    /* IDR NAL */
+    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    idx += ret;
+    nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
+
+    if (nal_unit_type != 19 && 20 != nal_unit_type) {
+        free(nal_buf);
+        fprintf(stderr, "expecting IDR nal (%d)\n", nal_unit_type);
+        return -1;
+    }
+    {
+        init_get_bits(gb, nal_buf, nal_len);
+        skip_bits(gb, 16);  // nal header
+
+        skip_bits(gb, 1);   //first_slice_segment_in_pic_flag
+        skip_bits(gb, 1);   //no_output_of_prior_pics_flag
+        get_ue_golomb(gb);  //slice_pic_parameter_set_id
+
+        // [...] is first_slice_segment_in_pic
+
+        for (i = 0; i < num_extra_slice_header_bits; i++)
+            skip_bits(gb, 1);   //slice_reserved_flag[ i ]
+        get_ue_golomb(gb);      //slice_type
+        if (output_flag_present_flag)
+            skip_bits(gb, 1);   //pic_output_flag
+
+        // [...] not separate colour plane
+        // [...] is IDR
+
+        // TODO: determine SAO flag programatically. For now, always enc SAO
+        if (1) {
+            skip_bits(gb, 1);   //slice_sao_luma_flag
+            // chroma array type not 0 because this is not monochrome
+            skip_bits(gb, 1);   //slice_sao_chroma_flag
+        }
+
+        // [...] not P or B slice
+
+        slice_qp_delta = u_to_e_golomb(get_ue_golomb(gb));
+    }
+
+    free(nal_buf);
+    return 26 + init_qp_minus26 + slice_qp_delta;
+}
+
 /* suppress the VPS NAL and keep only the useful part of the SPS
    header. The decoder can rebuild a valid HEVC stream if needed. */
 static int build_modified_sps(uint8_t **pout_buf, int *pout_buf_len,
@@ -2109,7 +2202,8 @@ void help(int is_full)
            "-deblocking          set offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
            "-psy                 values for x265's psyRd:psyRdoq setting (0:0 to 2.0:50.0, default = 0)\n"
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
-           "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
+           "-alphaq              set quantizer parameter for the alpha channel,\n"
+           "                         (default = same as JCTVC -q value or extracted from x265 bitstream)\n"
            "-premul              store the color with premultiplied alpha\n"
            "-limitedrange        encode the color data with the limited range of video\n"
            "-hash                include MD5 hash in HEVC bitstream\n"
@@ -2463,7 +2557,7 @@ int main(int argc, char **argv)
     if (qp >= 0)
         p->qp = qp;
     else
-        p->qp = (size > 0) ? 0 : DEFAULT_QP - 6*(encoder_type == HEVC_ENCODER_X265);
+        p->qp = (size > 0) ? 0 : DEFAULT_QP;
 
     p->size = size;
     p->size_limit = size_limit;
@@ -2493,12 +2587,8 @@ int main(int argc, char **argv)
         memset(p, 0, sizeof(*p));
         if (alpha_qp < 0) {
             p->qp = DEFAULT_QP;
-            if (qp >= 0)
-                p->qp = qp + 6*(encoder_type == HEVC_ENCODER_X265);
-            else if (size > 0) {
-                fprintf(stderr, "Must indicate alpha quality alongside color size\n");
-                exit(1);
-            }
+            if (encoder_type == HEVC_ENCODER_X265)
+                p->qp = get_pic_base_qp(out_buf, out_buf_len);
         } else {
             p->qp = alpha_qp;
         }
