@@ -1635,7 +1635,7 @@ static inline int u_to_e_golomb(uint32_t ueg)
 /* Base QP used for deciding JCTVC alpha QP after x265 multipass */
 static int get_pic_base_qp(const uint8_t *buf, int buf_len)
 {
-    int nal_unit_type, nal_len, idx, i, ret;
+    int nal_unit_type, nal_len, idx, i;
     int output_flag_present_flag, num_extra_slice_header_bits;
     int init_qp_minus26, slice_qp_delta;
     uint8_t *nal_buf;
@@ -1643,12 +1643,12 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
 
     /* VPS NAL */
     idx = extract_nal(&nal_buf, &nal_len, buf, buf_len);
+    free(nal_buf);
     /* SPS NAL */
-    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
-    idx += ret;
+    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    free(nal_buf);
     /* PPS NAL */
-    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
-    idx += ret;
+    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
 
     if (nal_unit_type != 34) {
@@ -1671,10 +1671,9 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
         get_ue_golomb(gb);  //num_ref_idx_l1_default_active_minus1
         init_qp_minus26 = u_to_e_golomb(get_ue_golomb(gb));
     }
-
+    free(nal_buf);
     /* IDR NAL */
-    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
-    idx += ret;
+    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
 
     if (nal_unit_type != 19 && 20 != nal_unit_type) {
@@ -1712,8 +1711,8 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
 
         slice_qp_delta = u_to_e_golomb(get_ue_golomb(gb));
     }
-
     free(nal_buf);
+
     return 26 + init_qp_minus26 + slice_qp_delta;
 }
 
@@ -2554,10 +2553,11 @@ int main(int argc, char **argv)
 
     /* User QP/CRF, default QP/CRF for 1-pass,
        or (naive) auto-CRF for 1st pass of multipass */
+    /* Also matches x265 base QP to JCTVC CQP. x265 AQ adjust +/- from base */
     if (qp >= 0)
-        p->qp = qp;
+        p->qp = qp + 3*(encoder_type == HEVC_ENCODER_X265);
     else
-        p->qp = (size > 0) ? 0 : DEFAULT_QP;
+        p->qp = (size > 0) ? 0 : DEFAULT_QP + 3*(encoder_type == HEVC_ENCODER_X265);
 
     p->size = size;
     p->size_limit = size_limit;
@@ -2589,6 +2589,10 @@ int main(int argc, char **argv)
             p->qp = DEFAULT_QP;
             if (encoder_type == HEVC_ENCODER_X265)
                 p->qp = get_pic_base_qp(out_buf, out_buf_len);
+            if (p->qp < 0) {
+                fprintf(stderr, "Error with determining alpha QP\n");
+                exit(1);
+            }
         } else {
             p->qp = alpha_qp;
         }
