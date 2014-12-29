@@ -47,6 +47,8 @@ typedef struct {
     double size; /* 1000s of bytes, >0 */
     double size_tol; /* 1.0 to 10.0 */
     double aq_strength; /* 0.0 to 3.0 */
+    double psyrd; /* 0.0 to 2.0 */
+    double psyrdoq; /* 0.0 to 50.0 */
     int size_limit; /* 0 or 1 */
     int passes; /* 2 to 10 */
     int chroma_offset; /* -6 to 6 */

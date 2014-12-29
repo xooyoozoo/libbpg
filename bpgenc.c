@@ -2106,7 +2106,8 @@ void help(int is_full)
            "-aq-strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas\n"
            "                         (0.0 to 3.0, default = 1)\n"
            "-chroma-offset       qp offset for 2nd and 3rd components (-12 to 12, default = 0)\n"
-           "-deblocking          set deblock tC:Beta offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
+           "-deblocking          set offsets for lower/higher deblock strength (-6 to 6, default = -1)\n"
+           "-psy                 values for x265's psyRd:psyRdoq setting (0:0 to 2.0:50.0, default = 0)\n"
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
            "-premul              store the color with premultiplied alpha\n"
@@ -2133,6 +2134,7 @@ struct option long_opts[] = {
     { "aq-strength", required_argument },
     { "chroma-offset", required_argument },
     { "deblocking", required_argument },
+    { "psy", required_argument },
     { "wpp", required_argument },
     { NULL },
 };
@@ -2149,7 +2151,7 @@ int main(int argc, char **argv)
     FILE *f;
     int c, option_index, sei_decoded_picture_hash, is_png, extension_buf_len;
     int keep_metadata, cb_size, width, height, compress_level;
-    double size, size_tol, qp, alpha_qp, aq_strength;
+    double size, size_tol, qp, alpha_qp, aq_strength, psyrd, psyrdoq;
     int size_limit, passes, chroma_offset, deblocking, wpp;
     int bit_depth, lossless_mode, i, limited_range, premultiplied_alpha;
     int c_h_phase;
@@ -2166,6 +2168,8 @@ int main(int argc, char **argv)
     aq_strength = 1.0;
     chroma_offset = 0;
     deblocking = -1;
+    psyrd = 0;
+    psyrdoq = 0;
     wpp = 0;
     qp = -1;
     alpha_qp = -1;
@@ -2239,6 +2243,13 @@ int main(int argc, char **argv)
                 deblocking = deblocking <= -6 ? -6 : deblocking >= 6 ? 6 : deblocking;
                 break;
             case 12:
+                if (2 != sscanf(optarg, "%lf:%lf", &psyrd, &psyrdoq))
+                    psyrd = atof(optarg);
+
+                psyrd = psyrd <= 0 ? 0.0 : psyrd >= 2 ? 2.0 : psyrd;
+                psyrdoq = psyrdoq <= 0 ? 0.0 : psyrdoq >= 50 ? 50.0 : psyrdoq;
+                break;
+            case 13:
                 wpp = atoi(optarg);
                 wpp = wpp <= 0 ? 0 : wpp >= 1 ? 1 : wpp;
                 break;
@@ -2461,6 +2472,8 @@ int main(int argc, char **argv)
     p->aq_strength = aq_strength;
     p->chroma_offset = chroma_offset;
     p->deblocking = deblocking;
+    p->psyrd = psyrd;
+    p->psyrdoq = psyrdoq;
     p->wpp = wpp;
 
     p->out_name = outfilename;

@@ -130,6 +130,9 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->psyRd = p->bCULossless; /* x265 states this aids CU-lossless decisions */
 
+    p->psyRd = params->psyrd;
+    p->psyRdoq = params->psyrdoq;
+
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
     p->cbQpOffset = params->chroma_offset;
