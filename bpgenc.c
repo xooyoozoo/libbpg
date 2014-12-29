@@ -2433,12 +2433,12 @@ int main(int argc, char **argv)
             image_convert16to8(img_alpha);
     }
 
-    if (img_alpha && encoder_type != 0) {
+    /*if (img_alpha && encoder_type == HEVC_ENCODER_X265) {
         fprintf(stderr, "x265 doesn't support 4th plane, and we can't (yet) mix encoders\n");
         exit(1);
-    }
+    }*/
 
-    if (size > 0 && encoder_type != 1) {
+    if (size > 0 && encoder_type != HEVC_ENCODER_X265) {
         fprintf(stderr, "Must use x265 encoder when using multipass\n");
         exit(1);
     }
@@ -2467,7 +2467,7 @@ int main(int argc, char **argv)
     if (qp >= 0)
         p->qp = qp;
     else
-        p->qp = (size > 0) ? 0 : DEFAULT_QP;
+        p->qp = (size > 0) ? 0 : DEFAULT_QP - 6*(encoder_type == HEVC_ENCODER_X265);
 
     p->out_name = outfilename;
     p->lossless = lossless_mode;
@@ -2484,16 +2484,24 @@ int main(int argc, char **argv)
     alpha_buf_len = 0;
     if (img_alpha) {
         memset(p, 0, sizeof(*p));
-        if (alpha_qp < 0)
-            p->qp = qp;
-        else
+        if (alpha_qp < 0) {
+            p->qp = DEFAULT_QP;
+            if (qp >= 0)
+                p->qp = qp + 6*(encoder_type == HEVC_ENCODER_X265);
+            else if (size > 0) {
+                fprintf(stderr, "Must indicate alpha quality alongside color size\n");
+                exit(1);
+            }
+        } else {
             p->qp = alpha_qp;
+        }
         p->lossless = lossless_mode;
         p->sei_decoded_picture_hash = sei_decoded_picture_hash;
         p->compress_level = compress_level;
         p->verbose = verbose;
 
-        alpha_buf_len = hevc_encode_picture2(&alpha_buf, img_alpha, p, encoder_type);
+        /* Force JCTVC encoder for monochrome 4th plane */
+        alpha_buf_len = hevc_encode_picture2(&alpha_buf, img_alpha, p, 0);
         if (alpha_buf_len < 0) {
             fprintf(stderr, "Error while encoding picture (alpha plane)\n");
             exit(1);

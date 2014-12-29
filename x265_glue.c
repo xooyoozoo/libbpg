@@ -201,7 +201,8 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     buf = malloc(buf_len);
     idx = 0;
     for(i = 0; i < nal_count; i++) {
-        memcpy(buf + idx, p_nal[i].payload, p_nal[i].sizeBytes);
+        if (p_nal[i].type != 39)
+            memcpy(buf + idx, p_nal[i].payload, p_nal[i].sizeBytes);
         idx += p_nal[i].sizeBytes;
     }
 
