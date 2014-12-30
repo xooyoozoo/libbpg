@@ -2198,8 +2198,8 @@ void help(int is_full)
            "-aq-strength         set x265's AQ strength, where higher further prioritizes low-cost textural areas\n"
            "                         (0.0 to 3.0, default = 1)\n"
            "-chroma-offset       qp offset for 2nd and 3rd components (-6 to 6, default = 0)\n"
-           "-deblocking          set offsets for lower/higher deblock strength (-6 to 6, default = -3)\n"
-           "-psy                 values for x265's psyRd:psyRdoq setting (0:0 to 2.0:50.0, default = 1:2)\n"
+           "-deblocking          set offsets for lower/higher deblock strength (-6 to 6, default = -2)\n"
+           "-psy                 values for x265's psyRd:psyRdoq setting (0:0 to 2:50, default = 0.8:2.4)\n"
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-alphaq              set quantizer parameter for the alpha channel,\n"
            "                         (default = same as JCTVC -q value or extracted from x265 bitstream)\n"
@@ -2260,9 +2260,9 @@ int main(int argc, char **argv)
     passes = 5;
     aq_strength = 1.0;
     chroma_offset = 0;
-    deblocking = -3;
-    psyrd = 1;
-    psyrdoq = 2;
+    deblocking = -2;
+    psyrd = 0.8;
+    psyrdoq = 2.4;
     wpp = 0;
     qp = -1;
     alpha_qp = -1;
