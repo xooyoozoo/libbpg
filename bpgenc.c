@@ -2177,8 +2177,8 @@ void help(int is_full)
            "-o outfile           set output filename (default = %s)\n"
            "-s size              set x265's multipass sizing in kB for color planes\n"
            "                         (overrides x265 quality control, can use q as a starting point)\n"
-           "-q quality           set quality/quantization (smaller gives better quality,\n"
-           "                         range: 0-51.0, default = %d)\n"
+           "-q quality           set quality/quantization ( #:# shorthand to also set alpha,\n"
+           "                         smaller gives better quality, range: 0-51.0, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
            "                         default=420)\n"
            "-c color_space       set the preferred color space (ycbcr, rgb, ycgco,\n"
@@ -2362,9 +2362,15 @@ int main(int argc, char **argv)
             }
             break;
         case 'q':
-            qp = atof(optarg);
-            if (qp < 0 || qp > 51) {
-                fprintf(stderr, "qp/crf must be between 0.0 and 51.0\n");
+            if (2 != sscanf(optarg, "%lf:%lf", &qp, &alpha_qp)) {
+                qp = atof(optarg);
+                if (qp < 0 || qp > 51) {
+                    fprintf(stderr, "quality must be between 0.0 and 51.0\n");
+                    exit(1);
+                }
+            } else if (qp < 0 || qp > 51 || alpha_qp < 0 || alpha_qp > 51) {
+                fprintf(stderr, "main (%.2lf) and alpha (%.2lf) q must be between 0 and 51\n",
+                                 qp, alpha_qp);
                 exit(1);
             }
             break;
@@ -2544,8 +2550,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "Must use x265 encoder when using multipass\n");
         exit(1);
     }
-    if (size_limit == 1 && (qp < 0 || size <= 0)) {
-        fprintf(stderr, "Must choose initial QP/CRF and size alongside size_limit\n");
+    if (size_limit > 0 && (qp < 0 || size <= 0)) {
+        fprintf(stderr, "Must choose both initial q and size alongside size-limit\n");
         exit(1);
     }
 
@@ -2587,8 +2593,8 @@ int main(int argc, char **argv)
         memset(p, 0, sizeof(*p));
         if (alpha_qp < 0) {
             p->qp = DEFAULT_QP;
-            if (encoder_type == HEVC_ENCODER_X265)
-                p->qp = get_pic_base_qp(out_buf, out_buf_len);
+            //if (encoder_type == HEVC_ENCODER_X265)
+            p->qp = get_pic_base_qp(out_buf, out_buf_len);
             if (p->qp < 0) {
                 fprintf(stderr, "Error with determining alpha QP\n");
                 exit(1);
