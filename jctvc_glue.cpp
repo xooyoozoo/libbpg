@@ -147,6 +147,12 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         add_opt(&argc, argv, "--SingleSignificanceMapContext");
         add_opt(&argc, argv, "--ImplicitResidualDPCM");
         add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
+
+        /* near-lossless blocks may do better as lossless */
+        if ((params->qp + 6*(img->bit_depth - 8)) <= 12) {
+            add_opt(&argc, argv, "--TransquantBypassEnableFlag");
+            add_opt(&argc, argv, "--CostMode=mixed_lossless_lossy");
+        }
     }
     /* Class F still benefits, but turning off TSkipFast make things slower */
     if (params->compress_level >= 9) {

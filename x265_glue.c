@@ -100,7 +100,9 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     if (params->verbose) {
         p->bEnablePsnr = 1;
         p->logLevel = X265_LOG_INFO;
-    } else p->logLevel = X265_LOG_NONE;
+    } else {
+        p->logLevel = X265_LOG_NONE;
+    }
 
     /* dummy frame rate */
     p->fpsNum = 25;
@@ -108,30 +110,31 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     p->totalFrames = 1;
 
     p->rc.rateControlMode = X265_RC_CRF;
+    p->rc.rfConstant = params->qp;
     if (params->size > 0) {
         bytes_tar = params->size * 1000.0;
         bytes_tol = bytes_tar * params->size_tol / 100.0;
-
         bpp = 8 * bytes_tar / (double)(img->w*img->h);
-        p->bCULossless = (bpp >= 4);
-        /* aid x265's 1st pass with arbitrary scaling from arbitrary base
-           unless qp is manually set */
-        if (params->qp <= 0)
-            p->rc.rfConstant = (bpp > 0.3) ? 5 + 10/bpp : 38;
-        else
-            p->rc.rfConstant = params->qp;
 
-        /* if in size_limit mode, first pass a legitimate encode */
-        p->rc.bEnableSlowFirstPass = params->size_limit;
-    } else {
-        p->rc.rfConstant = params->qp;
-        p->bCULossless = (params->qp <= 10);
+        /* aid x265's 1st pass with arbitrary scaling from arbitrary base
+           unless qp is already manually set */
+        if (params->qp <= 0)
+            p->rc.rfConstant = (bpp > 0.3) ? (5 + 10/bpp) : 38;
     }
 
-    p->psyRd = p->bCULossless; /* x265 states this aids CU-lossless decisions */
+    /* if in size_limit mode, first pass is a legitimate encode */
+    p->rc.bEnableSlowFirstPass = params->size_limit;
 
     p->psyRd = params->psyrd;
     p->psyRdoq = params->psyrdoq;
+
+    if ((p->rc.rfConstant + 6*(img->bit_depth - 8)) <= 12) {
+        p->bCULossless = 1;
+
+        /* x265 docs suggest these can aid CU-lossless decisions */
+        p->psyRd = 1;
+        p->psyRdoq = 0;
+    }
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
