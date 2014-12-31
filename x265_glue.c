@@ -111,6 +111,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->rc.rateControlMode = X265_RC_CRF;
     p->rc.rfConstant = params->qp;
+
     if (params->size > 0) {
         bytes_tar = params->size * 1000.0;
         bytes_tol = bytes_tar * params->size_tol / 100.0;
@@ -122,19 +123,15 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
             p->rc.rfConstant = (bpp > 0.3) ? (5 + 10/bpp) : 38;
     }
 
+    /* near-lossless blocks may do better as lossless */
+    if ((p->rc.rfConstant + 6*(img->bit_depth - 8)) <= 12)
+        p->bCULossless = 1;
+
     /* if in size_limit mode, first pass is a legitimate encode */
     p->rc.bEnableSlowFirstPass = params->size_limit;
 
     p->psyRd = params->psyrd;
     p->psyRdoq = params->psyrdoq;
-
-    if ((p->rc.rfConstant + 6*(img->bit_depth - 8)) <= 12) {
-        p->bCULossless = 1;
-
-        /* x265 docs suggest these can aid CU-lossless decisions */
-        p->psyRd = 1;
-        p->psyRdoq = 0;
-    }
 
     p->deblockingFilterBetaOffset = params->deblocking;
     p->deblockingFilterTCOffset = params->deblocking;
