@@ -141,7 +141,6 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     }
 
     /* Class F (YUV420 gaming/screen/text content) benefits without any speed change */
-    add_opt(&argc, argv, "--ResidualRotation");
     add_opt(&argc, argv, "--SingleSignificanceMapContext");
     add_opt(&argc, argv, "--ImplicitResidualDPCM");
 
@@ -160,6 +159,8 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
         add_opt(&argc, argv, "--HadamardME=0");
     } else {
+        /* current bpgdec problem with transform_skip_rotation and bypass */
+        add_opt(&argc, argv, "--ResidualRotation");
         /* current bpgdec problem with some RExt Tools and WPP */
         snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
         add_opt(&argc, argv, buf);

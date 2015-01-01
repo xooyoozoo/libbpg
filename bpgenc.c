@@ -2538,7 +2538,7 @@ int main(int argc, char **argv)
     /* WPP benefits most/all future decoders. Auto-on if img not small. */
     if ((height > 512 && width > 512) || width*height > 262144)
         wpp = 1;
-    /* color & alpha must have same WPP flag, but libav decode may not like WPP + RExt */
+    /* color & alpha must have same WPP flag, but bpgdec may not like WPP + RExt lossless */
     if (img_alpha && lossless_mode)
         wpp = 0;
 
