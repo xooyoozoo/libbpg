@@ -135,34 +135,19 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
     add_opt(&argc, argv, "--TransformSkip=1");
     add_opt(&argc, argv, "--TransformSkipFast=1");
 
-    /* current libav(?) problem with some RExt Tools and WPP */
-    if (params->compress_level <= 7 && !params->lossless) {
-        snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
-        add_opt(&argc, argv, buf);
-    }
-
-    /* Class F (YUV420 gaming/screen/text content) benefits without any speed change */
-    if (params->compress_level >= 8) {
-        add_opt(&argc, argv, "--ResidualRotation");
-        add_opt(&argc, argv, "--SingleSignificanceMapContext");
-        add_opt(&argc, argv, "--ImplicitResidualDPCM");
-        add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
-
-        /* near-lossless blocks may do better as lossless */
-        if ((params->qp + 6*(img->bit_depth - 8)) <= 12) {
-            add_opt(&argc, argv, "--TransquantBypassEnableFlag");
-            add_opt(&argc, argv, "--CostMode=mixed_lossless_lossy");
-        }
-    }
-    /* Class F still benefits, but turning off TSkipFast make things slower */
-    if (params->compress_level >= 9) {
-        add_opt(&argc, argv, "--TransformSkipLog2MaxSize=5");
-        add_opt(&argc, argv, "--TransformSkipFast=0");
-    }
-
     /* Note: Format Range extension */
     if (img->format == BPG_FORMAT_444) {
         add_opt(&argc, argv, "--CrossComponentPrediction=1");
+    }
+
+    /* Class F (YUV420 gaming/screen/text content) benefits without any speed change */
+    add_opt(&argc, argv, "--ResidualRotation");
+    add_opt(&argc, argv, "--SingleSignificanceMapContext");
+    add_opt(&argc, argv, "--ImplicitResidualDPCM");
+
+    if (params->compress_level >= 9) {
+        add_opt(&argc, argv, "--TransformSkipLog2MaxSize=5");
+        add_opt(&argc, argv, "--TransformSkipFast=0");  // throws warning otherwise
     }
 
     if (params->lossless) {
@@ -174,6 +159,10 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         add_opt(&argc, argv, "--ImplicitResidualDPCM");
         add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
         add_opt(&argc, argv, "--HadamardME=0");
+    } else {
+        /* current bpgdec problem with some RExt Tools and WPP */
+        snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
+        add_opt(&argc, argv, buf);
     }
 
 #if 0

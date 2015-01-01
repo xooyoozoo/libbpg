@@ -2536,10 +2536,10 @@ int main(int argc, char **argv)
         image_pad(img_alpha, cb_size);
 
     /* WPP benefits most/all future decoders. Auto-on if img not small. */
-    if ((height>512 && width>512) || width*height>262144)
+    if ((height > 512 && width > 512) || width*height > 262144)
         wpp = 1;
     /* color & alpha must have same WPP flag, but libav decode may not like WPP + RExt */
-    if (img_alpha && (lossless_mode || compress_level >= 8))
+    if (img_alpha && lossless_mode)
         wpp = 0;
 
     /* convert to the allocated pixel width to 8 bit if needed by the
