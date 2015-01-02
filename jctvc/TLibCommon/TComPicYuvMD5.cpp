@@ -76,7 +76,9 @@ static Void md5_plane(MD5& md5, const Pel* plane, UInt width, UInt height, UInt 
     /* convert pels into unsigned chars in little endian byte order.
      * NB, for 8bit data, data is truncated to 8bits. */
     for (UInt x = 0; x < width_less_modN; x += N)
+    {
       md5_block<OUTPUT_BITDEPTH_DIV8>(md5, &plane[y*stride + x], N);
+    }
 
     /* mop up any of the remaining line */
     md5_block<OUTPUT_BITDEPTH_DIV8>(md5, &plane[y*stride + width_less_modN], width_modN);
@@ -211,7 +213,10 @@ std::string digestToString(const TComDigest &digest, Int numChar)
 
   for(Int pos=0; pos<Int(digest.hash.size()); pos++)
   {
-    if ((pos % numChar) == 0 && pos!=0 ) result += ',';
+    if ((pos % numChar) == 0 && pos!=0 )
+    {
+      result += ',';
+    }
     result += hex[digest.hash[pos] >> 4];
     result += hex[digest.hash[pos] & 0xf];
   }

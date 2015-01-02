@@ -79,7 +79,11 @@ Void TComYuv::destroy()
   // memory free
   for(Int ch=0; ch<MAX_NUM_COMPONENT; ch++)
   {
-    if (m_apiBuf[ch]!=NULL) { xFree( m_apiBuf[ch] ); m_apiBuf[ch] = NULL; }
+    if (m_apiBuf[ch]!=NULL)
+    {
+      xFree( m_apiBuf[ch] );
+      m_apiBuf[ch] = NULL;
+    }
   }
 }
 
@@ -88,7 +92,9 @@ Void TComYuv::clear()
   for(Int ch=0; ch<MAX_NUM_COMPONENT; ch++)
   {
     if (m_apiBuf[ch]!=NULL)
+    {
       ::memset( m_apiBuf[ch], 0, ( getWidth(ComponentID(ch)) * getHeight(ComponentID(ch))  )*sizeof(Pel) );
+    }
   }
 }
 
@@ -98,7 +104,9 @@ Void TComYuv::clear()
 Void TComYuv::copyToPicYuv   ( TComPicYuv* pcPicYuvDst, const UInt ctuRsAddr, const UInt uiAbsZorderIdx, const UInt uiPartDepth, const UInt uiPartIdx ) const
 {
   for(Int ch=0; ch<getNumberValidComponents(); ch++)
+  {
     copyToPicComponent  ( ComponentID(ch), pcPicYuvDst, ctuRsAddr, uiAbsZorderIdx, uiPartDepth, uiPartIdx );
+  }
 }
 
 Void TComYuv::copyToPicComponent  ( const ComponentID ch, TComPicYuv* pcPicYuvDst, const UInt ctuRsAddr, const UInt uiAbsZorderIdx, const UInt uiPartDepth, const UInt uiPartIdx ) const
@@ -126,7 +134,9 @@ Void TComYuv::copyToPicComponent  ( const ComponentID ch, TComPicYuv* pcPicYuvDs
 Void TComYuv::copyFromPicYuv   ( const TComPicYuv* pcPicYuvSrc, const UInt ctuRsAddr, const UInt uiAbsZorderIdx )
 {
   for(Int ch=0; ch<getNumberValidComponents(); ch++)
+  {
     copyFromPicComponent  ( ComponentID(ch), pcPicYuvSrc, ctuRsAddr, uiAbsZorderIdx );
+  }
 }
 
 Void TComYuv::copyFromPicComponent  ( const ComponentID ch, const TComPicYuv* pcPicYuvSrc, const UInt ctuRsAddr, const UInt uiAbsZorderIdx )
@@ -153,7 +163,9 @@ Void TComYuv::copyFromPicComponent  ( const ComponentID ch, const TComPicYuv* pc
 Void TComYuv::copyToPartYuv( TComYuv* pcYuvDst, const UInt uiDstPartIdx ) const
 {
   for(Int ch=0; ch<getNumberValidComponents(); ch++)
+  {
     copyToPartComponent  ( ComponentID(ch), pcYuvDst, uiDstPartIdx );
+  }
 }
 
 Void TComYuv::copyToPartComponent( const ComponentID ch, TComYuv* pcYuvDst, const UInt uiDstPartIdx ) const
@@ -180,7 +192,9 @@ Void TComYuv::copyToPartComponent( const ComponentID ch, TComYuv* pcYuvDst, cons
 Void TComYuv::copyPartToYuv( TComYuv* pcYuvDst, const UInt uiSrcPartIdx ) const
 {
   for(Int ch=0; ch<getNumberValidComponents(); ch++)
+  {
     copyPartToComponent  ( ComponentID(ch), pcYuvDst, uiSrcPartIdx );
+  }
 }
 
 Void TComYuv::copyPartToComponent( const ComponentID ch, TComYuv* pcYuvDst, const UInt uiSrcPartIdx ) const
@@ -208,7 +222,9 @@ Void TComYuv::copyPartToComponent( const ComponentID ch, TComYuv* pcYuvDst, cons
 Void TComYuv::copyPartToPartYuv   ( TComYuv* pcYuvDst, const UInt uiPartIdx, const UInt iWidth, const UInt iHeight ) const
 {
   for(Int ch=0; ch<getNumberValidComponents(); ch++)
+  {
     copyPartToPartComponent   (ComponentID(ch), pcYuvDst, uiPartIdx, iWidth>>getComponentScaleX(ComponentID(ch)), iHeight>>getComponentScaleY(ComponentID(ch)) );
+  }
 }
 
 Void TComYuv::copyPartToPartComponent  ( const ComponentID ch, TComYuv* pcYuvDst, const UInt uiPartIdx, const UInt iWidthComponent, const UInt iHeightComponent ) const

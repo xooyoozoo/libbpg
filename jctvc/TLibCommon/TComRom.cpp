@@ -105,7 +105,10 @@ public:
             m_line++;
             m_column = 0;
           }
-          else m_column++;
+          else
+          {
+            m_column++;
+          }
         }
         break;
 
@@ -118,7 +121,10 @@ public:
             m_column++;
             m_line = 0;
           }
-          else m_line++;
+          else
+          {
+            m_line++;
+          }
         }
         break;
 

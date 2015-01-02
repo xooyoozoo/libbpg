@@ -162,16 +162,16 @@ protected:
 
   Double xCalculateRVM();
 
-  SEIActiveParameterSets*           xCreateSEIActiveParameterSets (TComSPS *sps);
+  SEIActiveParameterSets*           xCreateSEIActiveParameterSets (const TComSPS *sps);
   SEIFramePacking*                  xCreateSEIFramePacking();
   SEISegmentedRectFramePacking*     xCreateSEISegmentedRectFramePacking();
   SEIDisplayOrientation*            xCreateSEIDisplayOrientation();
   SEIToneMappingInfo*               xCreateSEIToneMappingInfo();
-  SEITempMotionConstrainedTileSets* xCreateSEITempMotionConstrainedTileSets ();
+  SEITempMotionConstrainedTileSets* xCreateSEITempMotionConstrainedTileSets (const TComPPS *pps);
   SEIKneeFunctionInfo*              xCreateSEIKneeFunctionInfo();
   SEIChromaSamplingFilterHint*      xCreateSEIChromaSamplingFilterHint(Bool bChromaLocInfoPresent, Int iHorFilterIndex, Int iVerFilterIdc);
 
-  Void xCreateLeadingSEIMessages (/*SEIMessages seiMessages,*/ AccessUnit &accessUnit, TComSPS *sps);
+  Void xCreateLeadingSEIMessages (/*SEIMessages seiMessages,*/ AccessUnit &accessUnit, const TComSPS *sps, const TComPPS *pps);
   Int xGetFirstSeiLocation (AccessUnit &accessUnit);
   Void xResetNonNestedSEIPresentFlags()
   {
@@ -184,7 +184,7 @@ protected:
     m_nestedBufferingPeriodSEIPresentInAU    = false;
     m_nestedPictureTimingSEIPresentInAU      = false;
   }
-  Void dblMetric( TComPic* pcPic, UInt uiNumSlices );
+  Void applyDeblockingFilterMetric( TComPic* pcPic, UInt uiNumSlices );
 };// END CLASS DEFINITION TEncGOP
 
 //! \}

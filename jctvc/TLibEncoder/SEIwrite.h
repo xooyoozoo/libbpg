@@ -49,16 +49,16 @@ public:
   SEIWriter() {};
   virtual ~SEIWriter() {};
 
-  Void writeSEImessage(TComBitIf& bs, const SEI& sei, TComSPS *sps);
+  Void writeSEImessage(TComBitIf& bs, const SEI& sei, const TComSPS *sps);
 
 protected:
-  Void xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, TComSPS *sps);
+  Void xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, const TComSPS *sps);
   Void xWriteSEIuserDataUnregistered(const SEIuserDataUnregistered &sei);
   Void xWriteSEIActiveParameterSets(const SEIActiveParameterSets& sei);
-  Void xWriteSEIDecodingUnitInfo(const SEIDecodingUnitInfo& sei, TComSPS *sps);
+  Void xWriteSEIDecodingUnitInfo(const SEIDecodingUnitInfo& sei, const TComSPS *sps);
   Void xWriteSEIDecodedPictureHash(const SEIDecodedPictureHash& sei);
-  Void xWriteSEIBufferingPeriod(const SEIBufferingPeriod& sei, TComSPS *sps);
-  Void xWriteSEIPictureTiming(const SEIPictureTiming& sei, TComSPS *sps);
+  Void xWriteSEIBufferingPeriod(const SEIBufferingPeriod& sei, const TComSPS *sps);
+  Void xWriteSEIPictureTiming(const SEIPictureTiming& sei, const TComSPS *sps);
   TComSPS *m_pSPS;
   Void xWriteSEIRecoveryPoint(const SEIRecoveryPoint& sei);
   Void xWriteSEIFramePacking(const SEIFramePacking& sei);
@@ -69,7 +69,7 @@ protected:
   Void xWriteSEINoDisplay(const SEINoDisplay &sei);
   Void xWriteSEIToneMappingInfo(const SEIToneMappingInfo& sei);
   Void xWriteSEISOPDescription(const SEISOPDescription& sei);
-  Void xWriteSEIScalableNesting(TComBitIf& bs, const SEIScalableNesting& sei, TComSPS *sps);
+  Void xWriteSEIScalableNesting(TComBitIf& bs, const SEIScalableNesting& sei, const TComSPS *sps);
   Void xWriteSEITempMotionConstrainedTileSets(TComBitIf& bs, const SEITempMotionConstrainedTileSets& sei);
   Void xWriteSEITimeCode(const SEITimeCode& sei);
   Void xWriteSEIChromaSamplingFilterHint(const SEIChromaSamplingFilterHint& sei/*, TComSPS *sps*/);

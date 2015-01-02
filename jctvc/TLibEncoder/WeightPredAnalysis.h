@@ -46,8 +46,6 @@ class  WeightPredAnalysis
 private:
 
   // member variables
-  Bool            m_weighted_pred_flag;
-  Bool            m_weighted_bipred_flag;
   WPScalingParam  m_wp[NUM_REF_PIC_LIST_01][MAX_NUM_REF][MAX_NUM_COMPONENT];
 
   // member functions
@@ -74,8 +72,6 @@ public:
   // WP analysis :
   Void  xCalcACDCParamSlice  (TComSlice *const slice);
   Void  xEstimateWPParamSlice(TComSlice *const slice);
-  Void  xStoreWPparam        (const Bool weighted_pred_flag, const Bool weighted_bipred_flag);
-  Void  xRestoreWPparam      (TComSlice *const slice);
   Void  xCheckWPEnable       (TComSlice *const slice);
 };
 

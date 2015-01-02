@@ -449,10 +449,6 @@ Void TComLoopFilter::xGetBoundaryStrengthSingle ( TComDataCU* pCtu, DeblockEdgeD
     }
     else
     {
-      if (edgeDir == EDGE_HOR)
-      {
-        pcCUP = pcCUQ->getPUAbove(uiPartP, uiPartQ, !pCtu->getSlice()->getLFCrossSliceBoundaryFlag(), false, !m_bLFCrossTileBoundary);
-      }
       if (pcSlice->isInterB() || pcCUP->getSlice()->isInterB())
       {
         Int iRefIdx;
@@ -471,10 +467,22 @@ Void TComLoopFilter::xGetBoundaryStrengthSingle ( TComDataCU* pCtu, DeblockEdgeD
         TComMv pcMvQ0 = pcCUQ->getCUMvField(REF_PIC_LIST_0)->getMv(uiPartQ);
         TComMv pcMvQ1 = pcCUQ->getCUMvField(REF_PIC_LIST_1)->getMv(uiPartQ);
 
-        if (piRefP0 == NULL) pcMvP0.setZero();
-        if (piRefP1 == NULL) pcMvP1.setZero();
-        if (piRefQ0 == NULL) pcMvQ0.setZero();
-        if (piRefQ1 == NULL) pcMvQ1.setZero();
+        if (piRefP0 == NULL)
+        {
+          pcMvP0.setZero();
+        }
+        if (piRefP1 == NULL)
+        {
+          pcMvP1.setZero();
+        }
+        if (piRefQ0 == NULL)
+        {
+          pcMvQ0.setZero();
+        }
+        if (piRefQ1 == NULL)
+        {
+          pcMvQ1.setZero();
+        }
 
         if ( ((piRefP0==piRefQ0)&&(piRefP1==piRefQ1)) || ((piRefP0==piRefQ1)&&(piRefP1==piRefQ0)) )
         {
@@ -523,8 +531,14 @@ Void TComLoopFilter::xGetBoundaryStrengthSingle ( TComDataCU* pCtu, DeblockEdgeD
         TComMv pcMvP0 = pcCUP->getCUMvField(REF_PIC_LIST_0)->getMv(uiPartP);
         TComMv pcMvQ0 = pcCUQ->getCUMvField(REF_PIC_LIST_0)->getMv(uiPartQ);
 
-        if (piRefP0 == NULL) pcMvP0.setZero();
-        if (piRefQ0 == NULL) pcMvQ0.setZero();
+        if (piRefP0 == NULL)
+        {
+          pcMvP0.setZero();
+        }
+        if (piRefQ0 == NULL)
+        {
+          pcMvQ0.setZero();
+        }
 
         uiBs  = ((piRefP0 != piRefQ0) ||
                  (abs(pcMvQ0.getHor() - pcMvP0.getHor()) >= 4) ||
@@ -762,8 +776,14 @@ Void TComLoopFilter::xEdgeFilterChroma( TComDataCU* pcCU, UInt uiAbsZorderIdx, U
         iQP = ((iQP_P + iQP_Q + 1) >> 1) + chromaQPOffset;
         if (iQP >= chromaQPMappingTableSize)
         {
-          if (pcPicYuvRec->getChromaFormat()==CHROMA_420) iQP -=6;
-          else if (iQP>51) iQP=51;
+          if (pcPicYuvRec->getChromaFormat()==CHROMA_420)
+          {
+            iQP -=6;
+          }
+          else if (iQP>51)
+          {
+            iQP=51;
+          }
         }
         else if (iQP >= 0 )
         {

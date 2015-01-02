@@ -136,8 +136,14 @@ Void TComInterpolationFilter::filterCopy(Int bitDepth, const Pel *src, Int srcSt
       {
         Pel val = src[ col ];
         val = rightShift_round((val + IF_INTERNAL_OFFS), shift);
-        if (val < minVal) val = minVal;
-        if (val > maxVal) val = maxVal;
+        if (val < minVal)
+        {
+          val = minVal;
+        }
+        if (val > maxVal)
+        {
+          val = maxVal;
+        }
         dst[col] = val;
       }
 

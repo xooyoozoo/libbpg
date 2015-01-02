@@ -49,16 +49,16 @@ struct NALUnit
 {
   NalUnitType m_nalUnitType; ///< nal_unit_type
   UInt        m_temporalId;  ///< temporal_id
-  UInt        m_reservedZero6Bits; ///< reserved_zero_6bits
+  UInt        m_nuhLayerId;  ///< nuh_layer_id
 
   /** construct an NALunit structure with given header values. */
   NALUnit(
     NalUnitType nalUnitType,
     Int         temporalId = 0,
-    Int         reservedZero6Bits = 0)
+    Int         nuhLayerId = 0)
     :m_nalUnitType (nalUnitType)
     ,m_temporalId  (temporalId)
-    ,m_reservedZero6Bits(reservedZero6Bits)
+    ,m_nuhLayerId  (nuhLayerId)
   {}
 
   /** default constructor - no initialization; must be perfomed by user */

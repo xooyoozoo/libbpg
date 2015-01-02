@@ -214,6 +214,7 @@
 #define CHROMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS  8
 
 #define MAX_NUM_LONG_TERM_REF_PICS                       33
+#define NUM_LONG_TERM_REF_PIC_SPS                         0
 
 #define DECODER_CHECK_SUBSTREAM_AND_SLICE_TRAILING_BYTES  1
 
@@ -249,7 +250,6 @@
 #define RExt__PREDICTION_WEIGHTING_ANALYSIS_DC_PRECISION                       0 ///< Additional fixed bit precision used during encoder-side weighting prediction analysis. Currently only used when high_precision_prediction_weighting_flag is set, for backwards compatibility reasons.
 
 #define MAX_TIMECODE_SEI_SETS                                                  3 ///< Maximum number of time sets
-
 
 //------------------------------------------------
 // Derived macros
@@ -764,9 +764,17 @@ struct TComDigest
 
   Bool operator==(const TComDigest &other) const
   {
-    if (other.hash.size() != hash.size()) return false;
+    if (other.hash.size() != hash.size())
+    {
+      return false;
+    }
     for(UInt i=0; i<UInt(hash.size()); i++)
-      if (other.hash[i] != hash[i]) return false;
+    {
+      if (other.hash[i] != hash[i])
+      {
+        return false;
+      }
+    }
     return true;
   }
 
