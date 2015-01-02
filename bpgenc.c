@@ -2538,8 +2538,10 @@ int main(int argc, char **argv)
     /* WPP benefits most/all future decoders. Auto-on if img not small. */
     if ((height > 512 && width > 512) || width*height > 262144)
         wpp = 1;
-    /* color & alpha must have same WPP flag, but bpgdec may not like WPP + RExt lossless */
-    if (img_alpha && lossless_mode)
+    /* color & alpha must have same WPP flag, but bpgdec dislikes WPP + gol-rice param adapt */
+    /* turn off wpp when lossless when that tool is useful (444) or at slowest levels */
+    if (lossless_mode && (img->format == BPG_FORMAT_444 || compress_level >= 9)
+                      && (img_alpha || encoder_type == HEVC_ENCODER_JCTVC))
         wpp = 0;
 
     /* convert to the allocated pixel width to 8 bit if needed by the
@@ -2597,10 +2599,11 @@ int main(int argc, char **argv)
         memset(p, 0, sizeof(*p));
         if (alpha_qp < 0) {
             p->qp = DEFAULT_QP;
-            //if (encoder_type == HEVC_ENCODER_X265)
-            p->qp = get_pic_base_qp(out_buf, out_buf_len);
+
+            if (!lossless_mode)
+                p->qp = get_pic_base_qp(out_buf, out_buf_len);
             if (p->qp < 0) {
-                fprintf(stderr, "Error with determining alpha QP\n");
+                fprintf(stderr, "Error with alpha QP value (%lf)\n", p->qp);
                 exit(1);
             }
         } else {

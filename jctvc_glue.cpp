@@ -149,6 +149,12 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         add_opt(&argc, argv, "--TransformSkipFast=0");  // throws warning otherwise
     }
 
+    /* current bpgdec problem with some RExt Tools and WPP */
+    if (params->wpp)
+        add_opt(&argc, argv, "--WaveFrontSynchro=1");
+    else
+        add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
+
     if (params->lossless) {
         add_opt(&argc, argv, "--CostMode=lossless");
         add_opt(&argc, argv, "--SAO=0");
@@ -156,14 +162,10 @@ int jctvc_encode_picture(uint8_t **pbuf, Image *img,
         add_opt(&argc, argv, "--TransquantBypassEnableFlag");
         add_opt(&argc, argv, "--CUTransquantBypassFlagForce");
         add_opt(&argc, argv, "--ImplicitResidualDPCM");
-        add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
         add_opt(&argc, argv, "--HadamardME=0");
     } else {
         /* current bpgdec problem with transform_skip_rotation and bypass */
         add_opt(&argc, argv, "--ResidualRotation");
-        /* current bpgdec problem with some RExt Tools and WPP */
-        snprintf(buf, sizeof(buf),"--WaveFrontSynchro=%d", params->wpp);
-        add_opt(&argc, argv, buf);
     }
 
 #if 0
