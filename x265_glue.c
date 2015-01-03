@@ -21,6 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef WIN32
+#include <windows.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -45,13 +48,17 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     int preset_index, passes, last_enc_size;
     double bpp, bytes_tar, bytes_tol;
     const char *preset;
-    char *stats_name;
+    char tmp[1024], stats_name[1024];
 
-    if ((stats_name = malloc(strlen(params->out_name) + 4 + 1)) != NULL) {
-        stats_name[0] = '\0';
-        strcat(stats_name, params->out_name);
-        strcat(stats_name, ".log");
-    } else fprintf(stderr, "Error with allocating x265 stats filename.\n");
+#ifdef WIN32
+    if (GetTempPath(sizeof(tmp), tmp) > sizeof(tmp) - 1) {
+        fprintf(stderr, "Temporary path too long\n");
+        return -1;
+    }
+#else
+    strcpy(tmp, "/tmp/");
+#endif
+    snprintf(stats_name, sizeof(stats_name), "%sx265%d.log", tmp, getpid());
 
     if (img->bit_depth != x265_max_bit_depth) {
         fprintf(stderr, "x265 is compiled to support only %d bit depth. Use the '-b %d' option to force the bit depth.\n",
@@ -232,8 +239,7 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     x265_picture_free(pic);
     x265_cleanup();
 
-    remove(stats_name);
-    free(stats_name);
+    unlink(stats_name);
 
     *pbuf = buf;
     return buf_len;
@@ -242,7 +248,8 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     x265_param_free(p);
     x265_picture_free(pic);
     x265_cleanup();
-    free(stats_name);
+
+    unlink(stats_name);
 
     *pbuf = NULL;
     return -1;
