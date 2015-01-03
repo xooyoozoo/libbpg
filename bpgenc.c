@@ -2207,7 +2207,7 @@ void help(int is_full)
            "-wpp                 splits entropy coding to aid row-wise parallelization (0/1, auto-on with large files)\n"
            "-alphaq              set quantizer parameter for the alpha channel,\n"
            "                         (default = same as JCTVC -q value or extracted from x265 bitstream)\n"
-           "-premul              store the color with premultiplied alpha\n"
+           "-premul              store the color with premultiplied alpha (0 or 1, default 1 for lossy)\n"
            "-limitedrange        encode the color data with the limited range of video\n"
            "-hash                include MD5 hash in HEVC bitstream\n"
            "-keepmetadata        keep the metadata (from JPEG: EXIF, ICC profile, XMP, from PNG: ICC profile)\n"
@@ -2224,7 +2224,7 @@ struct option long_opts[] = {
     { "alphaq", required_argument },
     { "lossless", no_argument },
     { "limitedrange", no_argument },
-    { "premul", no_argument },
+    { "premul", required_argument },
     { "size-limit", no_argument },
     { "size-tol", required_argument },
     { "passes", required_argument },
@@ -2281,7 +2281,7 @@ int main(int argc, char **argv)
     lossless_mode = 0;
     encoder_type = HEVC_ENCODER_COUNT;
     limited_range = 0;
-    premultiplied_alpha = 0;
+    premultiplied_alpha = -1;
 
     for(;;) {
         c = getopt_long_only(argc, argv, "s:q:o:hf:c:vm:b:e:", long_opts, &option_index);
@@ -2314,7 +2314,8 @@ int main(int argc, char **argv)
                 limited_range = 1;
                 break;
             case 5:
-                premultiplied_alpha = 1;
+                if (1 == sscanf(optarg, "%d", &premultiplied_alpha))
+                    premultiplied_alpha = premultiplied_alpha > 1 ? 1 : premultiplied_alpha;
                 break;
             case 6:
                 size_limit = 1;
@@ -2474,6 +2475,9 @@ int main(int argc, char **argv)
             is_png = 0;
         fseek(f, 0, SEEK_SET);
     }
+
+    if (premultiplied_alpha < 0)
+        premultiplied_alpha = !(lossless_mode);
 
     if (is_png) {
         img = read_png(&md, f, color_space, bit_depth, limited_range,
