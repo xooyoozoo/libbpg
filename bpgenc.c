@@ -34,6 +34,10 @@
 
 #include "bpgenc.h"
 
+#if defined(USE_X265)
+#include "x265.h"
+#endif
+
 typedef uint16_t PIXEL;
 
 static void put_ue(uint8_t **pp, uint32_t v);
@@ -2185,10 +2189,10 @@ void help(int is_full)
            "                         ycbcr_bt709, ycbcr_bt2020, default=ycbcr)\n"
            "-b bit_depth         set the bit depth (8 to %d, default = %d)\n"
            "-lossless            enable lossless mode\n"
-           "-e encoder           select the HEVC encoder (%s, default = %s)\n"
+           "-e encoder           select the HEVC encoder (%s, lossy 420 default = %s)\n"
            "-m level             select the compression level (1=fast, 9=slow, default = %d)\n"
            , DEFAULT_OUTFILENAME, DEFAULT_QP, BIT_DEPTH_MAX, DEFAULT_BIT_DEPTH,
-           hevc_encoders, hevc_encoder_name[0], DEFAULT_COMPRESS_LEVEL);
+           hevc_encoders, hevc_encoder_name[HEVC_ENCODER_COUNT-1], DEFAULT_COMPRESS_LEVEL);
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-size-limit          uses size setting as a cap: first encode in normal qp/crf mode,\n"
@@ -2275,7 +2279,7 @@ int main(int argc, char **argv)
     compress_level = DEFAULT_COMPRESS_LEVEL;
     bit_depth = DEFAULT_BIT_DEPTH;
     lossless_mode = 0;
-    encoder_type = 0;
+    encoder_type = HEVC_ENCODER_COUNT;
     limited_range = 0;
     premultiplied_alpha = 0;
 
@@ -2489,6 +2493,9 @@ int main(int argc, char **argv)
 
     /* extract the alpha plane */
     if (img->has_alpha) {
+        if (!USE_JCTVC)
+            fprintf(stderr, "Need JCTVC encoder for extra monochrome plane\n");
+
         int c_idx;
 
         img_alpha = malloc(sizeof(Image));
@@ -2534,6 +2541,16 @@ int main(int argc, char **argv)
     image_pad(img, cb_size);
     if (img_alpha)
         image_pad(img_alpha, cb_size);
+
+    /* by default, use x265 if available unless content is RExt-y */
+    if (encoder_type >= HEVC_ENCODER_COUNT) {
+        if (USE_X265 && x265_max_bit_depth == bit_depth
+                     && !lossless_mode
+                     && format == BPG_FORMAT_420)
+            encoder_type = HEVC_ENCODER_X265;
+        else
+            encoder_type = 0;
+    }
 
     /* WPP benefits most/all future decoders. Auto-on if img not small. */
     if ((height > 512 && width > 512) || width*height > 262144)
@@ -2617,7 +2634,7 @@ int main(int argc, char **argv)
         p->verbose = verbose;
 
         /* Force JCTVC encoder for monochrome 4th plane */
-        alpha_buf_len = hevc_encode_picture2(&alpha_buf, img_alpha, p, 0);
+        alpha_buf_len = hevc_encode_picture2(&alpha_buf, img_alpha, p, HEVC_ENCODER_JCTVC);
         if (alpha_buf_len < 0) {
             fprintf(stderr, "Error while encoding picture (alpha plane)\n");
             exit(1);
