@@ -36,7 +36,7 @@ EMCC=emcc
 
 PWD:=$(shell pwd)
 
-CFLAGS:=-O3 -march=native -Wall -MMD -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -fno-math-errno -fno-signed-zeros -fno-tree-vectorize -fomit-frame-pointer
+CFLAGS:=-O3 -Wall -MMD -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -fno-math-errno -fno-signed-zeros -fno-tree-vectorize -fomit-frame-pointer
 CFLAGS+=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_REENTRANT
 CFLAGS+=-I.
 CFLAGS+=-DCONFIG_BPG_VERSION=\"$(shell cat VERSION)\"
@@ -51,7 +51,7 @@ EMLDFLAGS+=-s NO_FILESYSTEM=1 -s NO_BROWSER=1
 EMLDFLAGS+=-O3 --memory-init-file 0 --closure 1 --post-js post.js
 EMCFLAGS:=$(CFLAGS)
 
-LDFLAGS=-g -lz -flto
+LDFLAGS=-lz -flto
 ifdef CONFIG_APPLE
 LDFLAGS+=-Wl,-dead_strip
 else
@@ -133,7 +133,7 @@ endif # !CONFIG_APPLE
 LIBS+=-lm -lpthread
 endif # !CONFIG_WIN32
 
-BPGENC_LIBS+=-lpng -ljpeg $(LIBS)
+BPGENC_LIBS+=-lpng16 -ljpeg $(LIBS)
 
 bpgenc.o: CFLAGS+=-Wno-unused-but-set-variable
 
@@ -141,7 +141,7 @@ libbpg.a: $(LIBBPG_OBJS)
 	$(AR) rcs $@ $^
 
 bpgdec$(EXE): bpgdec.o libbpg.a
-	$(CC) $(LDFLAGS) -o $@ $^ -lpng $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lpng16 $(LIBS)
 
 bpgenc$(EXE): $(BPGENC_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(BPGENC_LIBS)

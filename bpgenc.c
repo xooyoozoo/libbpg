@@ -1651,10 +1651,10 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
     /* SPS NAL */
     idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     free(nal_buf);
+
     /* PPS NAL */
     idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
-
     if (nal_unit_type != 34) {
         free(nal_buf);
         fprintf(stderr, "expecting PPS nal (%d)\n", nal_unit_type);
@@ -1676,10 +1676,10 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
         init_qp_minus26 = u_to_e_golomb(get_ue_golomb(gb));
     }
     free(nal_buf);
+
     /* IDR NAL */
     idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
-
     if (nal_unit_type != 19 && 20 != nal_unit_type) {
         free(nal_buf);
         fprintf(stderr, "expecting IDR nal (%d)\n", nal_unit_type);

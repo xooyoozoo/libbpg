@@ -228,9 +228,15 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     buf = malloc(buf_len);
     idx = 0;
     for(i = 0; i < nal_count; i++) {
-        /* ignore NAL_UNIT_PREFIX_SEI */
-        if (p_nal[i].type != 39)
+        /* only allow expected NAL types */
+        if ((p_nal[i].type == 40 && params->sei_decoded_picture_hash)
+            || p_nal[i].type == NAL_UNIT_VPS
+            || p_nal[i].type == NAL_UNIT_SPS
+            || p_nal[i].type == NAL_UNIT_PPS
+            || p_nal[i].type == NAL_UNIT_CODED_SLICE_IDR_W_RADL
+            || p_nal[i].type == NAL_UNIT_CODED_SLICE_IDR_N_LP) {
             memcpy(buf + idx, p_nal[i].payload, p_nal[i].sizeBytes);
+        }
         idx += p_nal[i].sizeBytes;
     }
 
