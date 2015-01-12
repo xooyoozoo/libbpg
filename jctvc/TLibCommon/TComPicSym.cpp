@@ -58,7 +58,8 @@ TComPicSym::TComPicSym()
 ,m_numPartInCtuWidth(0)
 ,m_numPartInCtuHeight(0)
 ,m_numCtusInFrame(0)
-,m_apSlices()
+,m_apcTComSlice(NULL)
+,m_uiNumAllocatedSlice(0)
 ,m_pictureCtuArray(NULL)
 ,m_numTileColumnsMinus1(0)
 ,m_numTileRowsMinus1(0)
@@ -69,15 +70,9 @@ TComPicSym::TComPicSym()
 {}
 
 
-Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxWidth, UInt uiMaxHeight, UInt uiMaxDepth )
+Void TComPicSym::create  ( ChromaFormat chromaFormatIDC, Int iPicWidth, Int iPicHeight, UInt uiMaxWidth, UInt uiMaxHeight, UInt uiMaxDepth )
 {
   UInt i;
-  m_sps = sps;
-  m_pps = pps;
-
-  const ChromaFormat chromaFormatIDC=sps.getChromaFormatIdc();
-  const Int iPicWidth  = sps.getPicWidthInLumaSamples();
-  const Int iPicHeight = sps.getPicHeightInLumaSamples();
 
   m_uhTotalDepth       = uiMaxDepth;
   m_numPartitionsInCtu = 1<<(m_uhTotalDepth<<1);
@@ -97,9 +92,17 @@ Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxWid
   m_numCtusInFrame     = m_frameWidthInCtus * m_frameHeightInCtus;
   m_pictureCtuArray    = new TComDataCU*[m_numCtusInFrame];
 
-  clearSliceBuffer();
-  allocateNewSlice();
-
+  if (m_uiNumAllocatedSlice>0)
+  {
+    for ( i=0; i<m_uiNumAllocatedSlice ; i++ )
+    {
+      delete m_apcTComSlice[i];
+    }
+    delete [] m_apcTComSlice;
+  }
+  m_apcTComSlice      = new TComSlice*[m_numCtusInFrame];
+  m_apcTComSlice[0]   = new TComSlice;
+  m_uiNumAllocatedSlice = 1;
   for ( i=0; i<m_numCtusInFrame ; i++ )
   {
     m_pictureCtuArray[i] = new TComDataCU;
@@ -121,16 +124,19 @@ Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxWid
   }
 
   m_saoBlkParams = new SAOBlkParam[m_numCtusInFrame];
-
-
-  xInitTiles();
-  xInitCtuTsRsAddrMaps();
-
 }
 
 Void TComPicSym::destroy()
 {
-  clearSliceBuffer();
+  if (m_uiNumAllocatedSlice>0)
+  {
+    for (Int i = 0; i<m_uiNumAllocatedSlice ; i++ )
+    {
+      delete m_apcTComSlice[i];
+    }
+    delete [] m_apcTComSlice;
+  }
+  m_apcTComSlice = NULL;
 
   for (Int i = 0; i < m_numCtusInFrame; i++)
   {
@@ -158,26 +164,26 @@ Void TComPicSym::destroy()
 
 Void TComPicSym::allocateNewSlice()
 {
-  m_apSlices.push_back(new TComSlice);
-  m_apSlices.back()->setPPS(&m_pps);
-  m_apSlices.back()->setSPS(&m_sps);
-  if (m_apSlices.size()>=2)
+  assert ((m_uiNumAllocatedSlice + 1) <= m_numCtusInFrame);
+  m_apcTComSlice[m_uiNumAllocatedSlice ++] = new TComSlice;
+  if (m_uiNumAllocatedSlice>=2)
   {
-    m_apSlices.back()->copySliceInfo( m_apSlices[m_apSlices.size()-2] );
-    m_apSlices.back()->initSlice();
+    m_apcTComSlice[m_uiNumAllocatedSlice-1]->copySliceInfo( m_apcTComSlice[m_uiNumAllocatedSlice-2] );
+    m_apcTComSlice[m_uiNumAllocatedSlice-1]->initSlice();
   }
 }
 
 Void TComPicSym::clearSliceBuffer()
 {
-  for (UInt i = 0; i < UInt(m_apSlices.size()); i++)
+  UInt i;
+  for (i = 1; i < m_uiNumAllocatedSlice; i++)
   {
-    delete m_apSlices[i];
+    delete m_apcTComSlice[i];
   }
-  m_apSlices.clear();
+  m_uiNumAllocatedSlice = 1;
 }
 
-Void TComPicSym::xInitCtuTsRsAddrMaps()
+Void TComPicSym::initCtuTsRsAddrMaps()
 {
   //generate the Coding Order Map and Inverse Coding Order Map
   for(Int ctuTsAddr=0, ctuRsAddr=0; ctuTsAddr<getNumberOfCtusInFrame(); ctuTsAddr++, ctuRsAddr = xCalculateNextCtuRSAddr(ctuRsAddr))
@@ -189,20 +195,20 @@ Void TComPicSym::xInitCtuTsRsAddrMaps()
   setCtuRsToTsAddrMap(getNumberOfCtusInFrame(), getNumberOfCtusInFrame());
 }
 
-Void TComPicSym::xInitTiles()
+Void TComPicSym::initTiles(TComPPS *pps)
 {
   //set NumColumnsMinus1 and NumRowsMinus1
-  setNumTileColumnsMinus1( m_pps.getNumTileColumnsMinus1() );
-  setNumTileRowsMinus1(    m_pps.getNumTileRowsMinus1()    );
+  setNumTileColumnsMinus1( pps->getNumTileColumnsMinus1() );
+  setNumTileRowsMinus1(    pps->getNumTileRowsMinus1()    );
 
-  const Int numCols = m_pps.getNumTileColumnsMinus1() + 1;
-  const Int numRows = m_pps.getNumTileRowsMinus1() + 1;
+  const Int numCols = pps->getNumTileColumnsMinus1() + 1;
+  const Int numRows = pps->getNumTileRowsMinus1() + 1;
   const Int numTiles = numRows * numCols;
 
   // allocate memory for tile parameters
   m_tileParameters.resize(numTiles);
 
-  if( m_pps.getTileUniformSpacingFlag() )
+  if( pps->getTileUniformSpacingFlag() )
   {
     //set width and height for each (uniform) tile
     for(Int row=0; row < numRows; row++)
@@ -223,8 +229,8 @@ Void TComPicSym::xInitTiles()
       Int cumulativeTileWidth = 0;
       for(Int col=0; col < getNumTileColumnsMinus1(); col++)
       {
-        m_tileParameters[row * numCols + col].setTileWidthInCtus( m_pps.getTileColumnWidth(col) );
-        cumulativeTileWidth += m_pps.getTileColumnWidth(col);
+        m_tileParameters[row * numCols + col].setTileWidthInCtus( pps->getTileColumnWidth(col) );
+        cumulativeTileWidth += pps->getTileColumnWidth(col);
       }
       m_tileParameters[row * numCols + getNumTileColumnsMinus1()].setTileWidthInCtus( getFrameWidthInCtus()-cumulativeTileWidth );
     }
@@ -235,8 +241,8 @@ Void TComPicSym::xInitTiles()
       Int cumulativeTileHeight = 0;
       for(Int row=0; row < getNumTileRowsMinus1(); row++)
       {
-        m_tileParameters[row * numCols + col].setTileHeightInCtus( m_pps.getTileRowHeight(row) );
-        cumulativeTileHeight += m_pps.getTileRowHeight(row);
+        m_tileParameters[row * numCols + col].setTileHeightInCtus( pps->getTileRowHeight(row) );
+        cumulativeTileHeight += pps->getTileRowHeight(row);
       }
       m_tileParameters[getNumTileRowsMinus1() * numCols + col].setTileHeightInCtus( getFrameHeightInCtus()-cumulativeTileHeight );
     }
@@ -245,10 +251,10 @@ Void TComPicSym::xInitTiles()
 #if TILE_SIZE_CHECK
   Int minWidth  = 1;
   Int minHeight = 1;
-  const Int profileIdc = m_sps.getPTL()->getGeneralPTL()->getProfileIdc();
+  const Int profileIdc = pps->getSPS()->getPTL()->getGeneralPTL()->getProfileIdc();
   if (  profileIdc == Profile::MAIN || profileIdc == Profile::MAIN10) //TODO: add more profiles to the tile-size check...
   {
-    if (m_pps.getTilesEnabledFlag())
+    if (pps->getTilesEnabledFlag())
     {
       minHeight = 64  / g_uiMaxCUHeight;
       minWidth  = 256 / g_uiMaxCUWidth;

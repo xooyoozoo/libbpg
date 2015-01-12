@@ -152,8 +152,11 @@ Void TEncTop::destroy ()
   m_cGOPEncoder.        destroy();
   m_cSliceEncoder.      destroy();
   m_cCuEncoder.         destroy();
-  m_cEncSAO.            destroyEncData();
-  m_cEncSAO.            destroy();
+  if (m_cSPS.getUseSAO())
+  {
+    m_cEncSAO.destroyEncData();
+    m_cEncSAO.destroy();
+  }
   m_cLoopFilter.        destroy();
   m_cRateCtrl.          destroy();
   Int iDepth;
@@ -185,11 +188,15 @@ Void TEncTop::init(Bool isFieldCoding)
 {
   // initialize SPS
   xInitSPS();
-  xInitVPS();
+
+  // set the VPS profile information
+  *m_cVPS.getPTL() = *m_cSPS.getPTL();
+  m_cVPS.getTimingInfo()->setTimingInfoPresentFlag       ( false );
 
   m_cRdCost.setCostMode(m_costMode);
 
   // initialize PPS
+  m_cPPS.setSPS(&m_cSPS);
   xInitPPS();
   xInitRPS(isFieldCoding);
 
@@ -214,65 +221,9 @@ Void TEncTop::init(Bool isFieldCoding)
                   );
 
   // initialize encoder search class
-  m_cSearch.init( this, &m_cTrQuant, m_iSearchRange, m_bipredSearchRange, m_iFastSearch, &m_cEntropyCoder, &m_cRdCost, getRDSbacCoder(), getRDGoOnSbacCoder() );
+  m_cSearch.init( this, &m_cTrQuant, m_iSearchRange, m_bipredSearchRange, m_iFastSearch, 0, &m_cEntropyCoder, &m_cRdCost, getRDSbacCoder(), getRDGoOnSbacCoder() );
 
   m_iMaxRefPicNum = 0;
-
-  xInitScalingLists();
-}
-
-Void TEncTop::xInitScalingLists()
-{
-  // Initialise scaling lists
-  // The encoder will only use the SPS scaling lists. The PPS will never be marked present.
-
-  if(getUseScalingListId() == SCALING_LIST_OFF)
-  {
-    getTrQuant()->setFlatScalingList(m_cSPS.getChromaFormatIdc());
-    getTrQuant()->setUseScalingList(false);
-    m_cSPS.setScalingListPresentFlag(false);
-    m_cPPS.setScalingListPresentFlag(false);
-  }
-  else if(getUseScalingListId() == SCALING_LIST_DEFAULT)
-  {
-    m_cSPS.getScalingList().setDefaultScalingList ();
-    m_cSPS.setScalingListPresentFlag(false);
-    m_cPPS.setScalingListPresentFlag(false);
-    getTrQuant()->setScalingList(&(m_cSPS.getScalingList()), m_cSPS.getChromaFormatIdc());
-    getTrQuant()->setUseScalingList(true);
-  }
-  else if(getUseScalingListId() == SCALING_LIST_FILE_READ)
-  {
-    m_cSPS.getScalingList().setDefaultScalingList ();
-    if(m_cSPS.getScalingList().xParseScalingList(getScalingListFile()))
-    {
-      Bool bParsedScalingList=false; // Use of boolean so that assertion outputs useful string
-      assert(bParsedScalingList);
-      exit(1);
-    }
-    m_cSPS.getScalingList().checkDcOfMatrix();
-    m_cSPS.setScalingListPresentFlag(m_cSPS.getScalingList().checkDefaultScalingList());
-    m_cPPS.setScalingListPresentFlag(false);
-    getTrQuant()->setScalingList(&(m_cSPS.getScalingList()), m_cSPS.getChromaFormatIdc());
-    getTrQuant()->setUseScalingList(true);
-  }
-  else
-  {
-    printf("error : ScalingList == %d not supported\n",getUseScalingListId());
-    assert(0);
-  }
-
-  // Prepare delta's:
-  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
-  {
-    const Int predListStep = (sizeId == SCALING_LIST_32x32? (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) : 1); // if 32x32, skip over chroma entries.
-
-    for(UInt listId = 0; listId < SCALING_LIST_NUM; listId+=predListStep)
-    {
-      m_cSPS.getScalingList().checkPredMode( sizeId, listId );
-    }
-  }
-
 }
 
 // ====================================================================================================================
@@ -459,10 +410,7 @@ Void TEncTop::encode(Bool flush, TComPicYuv* pcPicYuvOrg, TComPicYuv* pcPicYuvTr
  */
 Void TEncTop::xGetNewPicBuffer ( TComPic*& rpcPic )
 {
-  // At this point, the SPS and PPS can be considered activated - they are copied to the new TComPic.
-
   TComSlice::sortPicList(m_cListPic);
-
 
   if (m_cListPic.size() >= (UInt)(m_iGOPSize + getMaxDecPicBuffering(MAX_TLAYER-1) + 2) )
   {
@@ -482,13 +430,13 @@ Void TEncTop::xGetNewPicBuffer ( TComPic*& rpcPic )
     if ( getUseAdaptiveQP() )
     {
       TEncPic* pcEPic = new TEncPic;
-      pcEPic->create( m_cSPS, m_cPPS, g_uiMaxCUWidth, g_uiMaxCUHeight, g_uiMaxCUDepth, m_cPPS.getMaxCuDQPDepth()+1, false);
+      pcEPic->create( m_iSourceWidth, m_iSourceHeight, m_chromaFormatIDC, g_uiMaxCUWidth, g_uiMaxCUHeight, g_uiMaxCUDepth, m_cPPS.getMaxCuDQPDepth()+1, m_conformanceWindow, m_defaultDisplayWindow, m_numReorderPics);
       rpcPic = pcEPic;
     }
     else
     {
       rpcPic = new TComPic;
-      rpcPic->create( m_cSPS, m_cPPS, g_uiMaxCUWidth, g_uiMaxCUHeight, g_uiMaxCUDepth, false );
+      rpcPic->create( m_iSourceWidth, m_iSourceHeight, m_chromaFormatIDC, g_uiMaxCUWidth, g_uiMaxCUHeight, g_uiMaxCUDepth, m_conformanceWindow, m_defaultDisplayWindow, m_numReorderPics, false );
     }
 
     m_cListPic.pushBack( rpcPic );
@@ -501,24 +449,6 @@ Void TEncTop::xGetNewPicBuffer ( TComPic*& rpcPic )
   rpcPic->getSlice(0)->setPOC( m_iPOCLast );
   // mark it should be extended
   rpcPic->getPicYuvRec()->setBorderExtension(false);
-}
-
-Void TEncTop::xInitVPS()
-{
-  // The SPS must have already been set up.
-  // set the VPS profile information.
-  *m_cVPS.getPTL() = *m_cSPS.getPTL();
-  m_cVPS.setMaxOpSets(1);
-  m_cVPS.getTimingInfo()->setTimingInfoPresentFlag       ( false );
-  m_cVPS.setNumHrdParameters( 0 );
-
-  m_cVPS.createHrdParamBuffer();
-  for( UInt i = 0; i < m_cVPS.getNumHrdParameters(); i ++ )
-  {
-    m_cVPS.setHrdOpSetIdx( 0, i );
-    m_cVPS.setCprmsPresentFlag( false, i );
-    // Set up HrdParameters here.
-  }
 }
 
 Void TEncTop::xInitSPS()
@@ -579,11 +509,25 @@ Void TEncTop::xInitSPS()
   m_cSPS.setQuadtreeTUMaxDepthInter( m_uiQuadtreeTUMaxDepthInter    );
   m_cSPS.setQuadtreeTUMaxDepthIntra( m_uiQuadtreeTUMaxDepthIntra    );
 
-  m_cSPS.setTMVPFlagsPresent((getTMVPModeId() == 2 || getTMVPModeId() == 1));
+  m_cSPS.setTMVPFlagsPresent(false);
 
   m_cSPS.setMaxTrSize   ( 1 << m_uiQuadtreeTULog2MaxSize );
 
+  Int i;
+
+  for (i = 0; i < g_uiMaxCUDepth-g_uiAddCUDepth; i++ )
+  {
+    m_cSPS.setAMPAcc( i, m_useAMP );
+    //m_cSPS.setAMPAcc( i, 1 );
+  }
+
   m_cSPS.setUseAMP ( m_useAMP );
+
+  for (i = g_uiMaxCUDepth-g_uiAddCUDepth; i < g_uiMaxCUDepth; i++ )
+  {
+    m_cSPS.setAMPAcc(i, 0);
+  }
+
 
   for (UInt channelType = 0; channelType < MAX_NUM_CHANNEL_TYPE; channelType++)
   {
@@ -609,7 +553,7 @@ Void TEncTop::xInitSPS()
   m_cSPS.setMaxTLayers( m_maxTempLayer );
   m_cSPS.setTemporalIdNestingFlag( ( m_maxTempLayer == 1 ) ? true : false );
 
-  for (Int i = 0; i < min(m_cSPS.getMaxTLayers(),(UInt) MAX_TLAYER); i++ )
+  for ( i = 0; i < min(m_cSPS.getMaxTLayers(),(UInt) MAX_TLAYER); i++ )
   {
     m_cSPS.setMaxDecPicBuffering(m_maxDecPicBuffering[i], i);
     m_cSPS.setNumReorderPics(m_numReorderPics[i], i);
@@ -617,7 +561,7 @@ Void TEncTop::xInitSPS()
 
   m_cSPS.setPCMFilterDisableFlag  ( m_bPCMFilterDisableFlag );
   m_cSPS.setDisableIntraReferenceSmoothing( m_disableIntraReferenceSmoothing );
-  m_cSPS.setScalingListFlag ( (m_useScalingListId == SCALING_LIST_OFF) ? 0 : 1 );
+  m_cSPS.setScalingListFlag ( (m_useScalingListId == 0) ? 0 : 1 );
   m_cSPS.setUseStrongIntraSmoothing( m_useStrongIntraSmoothing );
   m_cSPS.setVuiParametersPresentFlag(getVuiParametersPresentFlag());
 
@@ -656,36 +600,6 @@ Void TEncTop::xInitSPS()
     pcVUI->setLog2MaxMvLengthHorizontal(getLog2MaxMvLengthHorizontal());
     pcVUI->setLog2MaxMvLengthVertical(getLog2MaxMvLengthVertical());
   }
-  m_cSPS.setNumLongTermRefPicSPS(NUM_LONG_TERM_REF_PIC_SPS);
-  assert (NUM_LONG_TERM_REF_PIC_SPS <= MAX_NUM_LONG_TERM_REF_PICS);
-  for (Int k = 0; k < NUM_LONG_TERM_REF_PIC_SPS; k++)
-  {
-    m_cSPS.setLtRefPicPocLsbSps(k, 0);
-    m_cSPS.setUsedByCurrPicLtSPSFlag(k, 0);
-  }
-  if( getPictureTimingSEIEnabled() || getDecodingUnitInfoSEIEnabled() )
-  {
-    const UInt picWidth = m_cSPS.getPicWidthInLumaSamples();
-    const UInt picHeight= m_cSPS.getPicWidthInLumaSamples();
-
-    const UInt frameWidthInCtus   = ( picWidth + g_uiMaxCUWidth -1 ) / g_uiMaxCUWidth;
-    const UInt frameHeightInCtus  = ( picHeight + g_uiMaxCUHeight - 1 ) / g_uiMaxCUHeight;
-    const UInt numCtusInFrame = frameWidthInCtus * frameHeightInCtus;
-
-    UInt maxCU = getSliceArgument();
-    UInt numDU = ( getSliceMode() == FIXED_NUMBER_OF_CTU ) ? ( numCtusInFrame / maxCU ) : ( 0 );
-    if( numCtusInFrame % maxCU != 0 || numDU == 0 )
-    {
-      numDU ++;
-    }
-    m_cSPS.getVuiParameters()->getHrdParameters()->setNumDU( numDU );
-    m_cSPS.setHrdParameters( getFrameRate(), numDU, getTargetBitrate(), ( getIntraPeriod() > 0 ) );
-  }
-  if( getBufferingPeriodSEIEnabled() || getPictureTimingSEIEnabled() || getDecodingUnitInfoSEIEnabled() )
-  {
-    m_cSPS.getVuiParameters()->setHrdParametersPresentFlag( true );
-  }
-
 }
 
 Void TEncTop::xInitPPS()
@@ -698,26 +612,19 @@ Void TEncTop::xInitPPS()
     bUseDQP = true;
   }
 
-  if (m_costMode==COST_SEQUENCE_LEVEL_LOSSLESS || m_costMode==COST_LOSSLESS_CODING)
-  {
-    bUseDQP=false;
-  }
+  if (m_costMode==COST_SEQUENCE_LEVEL_LOSSLESS || m_costMode==COST_LOSSLESS_CODING) bUseDQP=false;
 
-
-  if ( m_RCEnableRateControl )
-  {
-    m_cPPS.setUseDQP(true);
-    m_cPPS.setMaxCuDQPDepth( 0 );
-  }
-  else if(bUseDQP)
+  if(bUseDQP)
   {
     m_cPPS.setUseDQP(true);
     m_cPPS.setMaxCuDQPDepth( m_iMaxCuDQPDepth );
+    m_cPPS.setMinCuDQPSize( m_cPPS.getSPS()->getMaxCUWidth() >> ( m_cPPS.getMaxCuDQPDepth()) );
   }
   else
   {
     m_cPPS.setUseDQP(false);
     m_cPPS.setMaxCuDQPDepth( 0 );
+    m_cPPS.setMinCuDQPSize( m_cPPS.getSPS()->getMaxCUWidth() >> ( m_cPPS.getMaxCuDQPDepth()) );
   }
 
   if ( m_maxCUChromaQpAdjustmentDepth >= 0 )
@@ -732,9 +639,19 @@ Void TEncTop::xInitPPS()
     m_cPPS.clearChromaQpAdjTable();
   }
 
+  if ( m_RCEnableRateControl )
+  {
+    m_cPPS.setUseDQP(true);
+    m_cPPS.setMaxCuDQPDepth( 0 );
+    m_cPPS.setMinCuDQPSize( m_cPPS.getSPS()->getMaxCUWidth() >> ( m_cPPS.getMaxCuDQPDepth()) );
+  }
+
+  m_cPPS.setMinCuChromaQpAdjSize( m_cPPS.getSPS()->getMaxCUWidth() >> ( m_cPPS.getMaxCuChromaQpAdjDepth()) );
+
   m_cPPS.setQpOffset(COMPONENT_Cb, m_chromaCbQpOffset );
   m_cPPS.setQpOffset(COMPONENT_Cr, m_chromaCrQpOffset );
 
+  m_cPPS.setNumSubstreams(m_iWaveFrontSubstreams);
   m_cPPS.setEntropyCodingSyncEnabledFlag( m_iWaveFrontSynchro > 0 );
   m_cPPS.setTilesEnabledFlag( (m_iNumColumnsMinus1 > 0 || m_iNumRowsMinus1 > 0) );
   m_cPPS.setUseWP( m_useWeightedPred );
@@ -755,23 +672,10 @@ Void TEncTop::xInitPPS()
   else
   {
     m_cPPS.setDeblockingFilterControlPresentFlag (m_DeblockingFilterControlPresent );
-
-    if (m_cPPS.getDeblockingFilterControlPresentFlag())
-    {
-      m_cPPS.setDeblockingFilterOverrideEnabledFlag( !getLoopFilterOffsetInPPS() );
-      m_cPPS.setPicDisableDeblockingFilterFlag( getLoopFilterDisable() );
-    }
-  }
-
-  if (m_cPPS.getDeblockingFilterControlPresentFlag() && ! m_cPPS.getPicDisableDeblockingFilterFlag())
-  {
-    m_cPPS.setDeblockingFilterBetaOffsetDiv2( getLoopFilterBetaOffset() );
-    m_cPPS.setDeblockingFilterTcOffsetDiv2( getLoopFilterTcOffset() );
   }
   m_cPPS.setLog2ParallelMergeLevelMinus2   (m_log2ParallelMergeLevelMinus2 );
   m_cPPS.setCabacInitPresentFlag(CABAC_INIT_PRESENT_FLAG);
   m_cPPS.setLoopFilterAcrossSlicesEnabledFlag( m_bLFCrossSliceBoundaryFlag );
-
 
   Int histogram[MAX_NUM_REF + 1];
   for( Int i = 0; i <= MAX_NUM_REF; i++ )
@@ -1033,9 +937,7 @@ Void TEncTop::selectReferencePictureSet(TComSlice* slice, Int POCCurr, Int GOPid
     slice->setRPSidx(m_iGOPSize+m_extraRPSs);
   }
 
-  TComReferencePictureSet *rps=slice->getLocalRPS();
-  (*rps) = *(slice->getSPS()->getRPSList()->getReferencePictureSet(slice->getRPSidx()));
-  slice->setRPS(rps);
+  slice->setRPS(getSPS()->getRPSList()->getReferencePictureSet(slice->getRPSidx()));
   slice->getRPS()->setNumberOfPictures(slice->getRPS()->getNumberOfNegativePictures()+slice->getRPS()->getNumberOfPositivePictures());
 }
 
@@ -1082,6 +984,14 @@ Void  TEncTop::xInitPPSforTiles()
   m_cPPS.setLoopFilterAcrossTilesEnabledFlag( m_loopFilterAcrossTilesEnabledFlag );
 
   // # substreams is "per tile" when tiles are independent.
+  if (m_iWaveFrontSynchro )
+  {
+    m_cPPS.setNumSubstreams(m_iWaveFrontSubstreams * (m_iNumColumnsMinus1+1));
+  }
+  else
+  {
+    m_cPPS.setNumSubstreams((m_iNumRowsMinus1+1) * (m_iNumColumnsMinus1+1));
+  }
 }
 
 Void  TEncCfg::xCheckGSParameters()
@@ -1134,9 +1044,7 @@ Void  TEncCfg::xCheckGSParameters()
   if( m_iNumRowsMinus1 && !m_tileUniformSpacingFlag )
   {
     for(Int i=0; i<m_iNumRowsMinus1; i++)
-    {
       uiCummulativeRowHeight += m_tileRowHeight[i];
-    }
 
     if( uiCummulativeRowHeight >= iHeightInCU )
     {

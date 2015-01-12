@@ -21,53 +21,41 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifdef WIN32
-#include <windows.h>
-#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include <math.h>
 #include <unistd.h>
 
 #include "bpgenc.h"
 
 #include "x265.h"
 
-int x265_encode_picture(uint8_t **pbuf, Image *img,
-                        const HEVCEncodeParams *params)
-{
+struct HEVCEncoderContext {
     x265_encoder *enc;
-    x265_param *p;
-    x265_picture *pic, *pic_in;
-    x265_nal *p_nal;
-    int buf_len, idx, c_count, i, j, ret, pic_count;
-    uint32_t nal_count;
+    x265_picture *pic;
     uint8_t *buf;
-    int preset_index, passes, last_enc_size;
-    double bpp, bytes_tar, bytes_tol;
+    int buf_len, buf_size;
+};
+
+static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
+{
+    HEVCEncoderContext *s;
+    x265_param *p;
+    int preset_index;
     const char *preset;
-    char tmp[1024], stats_name[1024];
 
-#ifdef WIN32
-    if (GetTempPath(sizeof(tmp), tmp) > sizeof(tmp) - 1) {
-        fprintf(stderr, "Temporary path too long\n");
-        return -1;
-    }
-#else
-    strcpy(tmp, "/tmp/");
-#endif
-    snprintf(stats_name, sizeof(stats_name), "%sx265%d.log", tmp, getpid());
+    s = malloc(sizeof(HEVCEncoderContext));
+    memset(s, 0, sizeof(*s));
 
-    if (img->bit_depth != x265_max_bit_depth) {
+    if (params->bit_depth != x265_max_bit_depth) {
         fprintf(stderr, "x265 is compiled to support only %d bit depth. Use the '-b %d' option to force the bit depth.\n",
                 x265_max_bit_depth, x265_max_bit_depth);
-        return -1;
+        return NULL;
     }
-    if (img->format == BPG_FORMAT_GRAY) {
+    if (params->chroma_format == BPG_FORMAT_GRAY) {
         fprintf(stderr, "x265 does not support monochrome (or alpha) data yet. Plase use the jctvc encoder.\n");
-        return -1;
+        return NULL;
     }
 
     p = x265_param_alloc();
@@ -82,9 +70,9 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
 
     p->bRepeatHeaders = 1;
     p->decodedPictureHashSEI = params->sei_decoded_picture_hash;
-    p->sourceWidth = img->w;
-    p->sourceHeight = img->h;
-    switch(img->format) {
+    p->sourceWidth = params->width;
+    p->sourceHeight = params->height;
+    switch(params->chroma_format) {
     case BPG_FORMAT_GRAY:
         p->internalCsp = X265_CSP_I400;
         break;
@@ -100,65 +88,72 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
     default:
         abort();
     }
-    p->keyframeMax = 1; /* only I frames */
-    p->frameNumThreads = 1;
-    p->internalBitDepth = img->bit_depth;
-    p->bEmitInfoSEI = 0;
-    if (params->verbose) {
-        p->bEnablePsnr = 1;
-        p->logLevel = X265_LOG_INFO;
+    if (params->intra_only) {
+        p->keyframeMax = 1; /* only I frames */
+        p->totalFrames = 1;
     } else {
-        p->logLevel = X265_LOG_NONE;
+        p->keyframeMax = 250;
+        p->totalFrames = 0;
+        p->maxNumReferences = 1;
+        p->bframes = 0;
     }
+    p->bEnableRectInter = 1;
+    p->bEnableAMP = 1; /* cannot use 0 due to header restriction */
+    p->internalBitDepth = params->bit_depth;
+    p->bEmitInfoSEI = 0;
+    if (params->verbose)
+        p->logLevel = X265_LOG_INFO;
+    else
+        p->logLevel = X265_LOG_NONE;
 
     /* dummy frame rate */
     p->fpsNum = 25;
     p->fpsDenom = 1;
-    p->totalFrames = 1;
 
-    p->rc.rateControlMode = X265_RC_CRF;
-    p->rc.rfConstant = params->qp;
-
-    if (params->size > 0) {
-        bytes_tar = params->size * 1000.0;
-        bytes_tol = bytes_tar * params->size_tol / 100.0;
-        bpp = 8 * bytes_tar / (double)(img->w*img->h);
-
-        /* aid x265's 1st pass with arbitrary scaling from arbitrary base
-           unless qp is already manually set */
-        if (params->qp <= 0)
-            p->rc.rfConstant = (bpp > 0.3) ? (5 + 10/bpp) : 38;
-    }
-
-    /* near-lossless blocks may do better as lossless */
-    if ((p->rc.rfConstant + 6*(img->bit_depth - 8)) <= 12)
-        p->bCULossless = 1;
-
-    /* if in size_limit mode, first pass is a legitimate encode */
-    p->rc.bEnableSlowFirstPass = params->size_limit;
-
-    p->psyRd = params->psyrd;
-    p->psyRdoq = params->psyrdoq;
-
-    p->deblockingFilterBetaOffset = params->deblocking;
-    p->deblockingFilterTCOffset = params->deblocking;
-
-    /* Chroma offset also accounts for psyRd.
-       x264 does this internally, but x265 doesn't seem to do so (?) */
-    p->cbQpOffset = params->chroma_offset - (int)(0.5 + p->psyRd);
-    p->crQpOffset = p->cbQpOffset;
-
-    p->rc.aqMode = X265_AQ_VARIANCE;
-    p->rc.aqStrength = params->aq_strength;
-
-    p->rc.cuTree = 0;   /* doesn't do anything for all-intra */
-    p->bEnableSAO = 1;  /* getting base qp from header becomes more simple */
-
-    p->bEnableWavefront = params->wpp;
+    p->rc.rateControlMode = X265_RC_CQP;
+    /* XXX: why do we need this offset to match the JCTVC quality ? */
+    if (params->bit_depth == 10)
+        p->rc.qp = params->qp + 7;
+    else
+        p->rc.qp = params->qp + 1;
     p->bLossless = params->lossless;
 
-    pic = x265_picture_alloc();
-    x265_picture_init(p, pic);
+    s->enc = x265_encoder_open(p);
+
+    s->pic = x265_picture_alloc();
+    x265_picture_init(p, s->pic);
+
+    s->pic->colorSpace = p->internalCsp;
+
+    x265_param_free(p);
+
+    return s;
+}
+
+static void add_nal(HEVCEncoderContext *s, const uint8_t *data, int data_len)
+{
+    int new_size, size;
+
+    size = s->buf_len + data_len;
+    if (size > s->buf_size) {
+        new_size = (s->buf_size * 3) / 2;
+        if (new_size < size)
+            new_size = size;
+        s->buf = realloc(s->buf, new_size);
+        s->buf_size = new_size;
+    }
+    memcpy(s->buf + s->buf_len, data, data_len);
+    s->buf_len += data_len;
+}
+
+static int x265_encode(HEVCEncoderContext *s, Image *img)
+{
+    int c_count, i, ret;
+    x265_picture *pic;
+    uint32_t nal_count;
+    x265_nal *p_nal;
+
+    pic = s->pic;
 
     if (img->format == BPG_FORMAT_GRAY)
         c_count = 1;
@@ -169,94 +164,47 @@ int x265_encode_picture(uint8_t **pbuf, Image *img,
         pic->stride[i] = img->linesize[i];
     }
     pic->bitDepth = img->bit_depth;
-    pic->colorSpace = p->internalCsp;
 
-    passes = (params->size > 0) ? params->passes : 1;
-    for (i = 0; i < passes; i++) {
-        p->rc.statFileName = strdup(stats_name);
-        p->rc.bStatWrite = passes - i - 1;
-
-        if (i > 0) x265_encoder_close(enc);
-        enc = x265_encoder_open(p);
-
-        pic_count = 0;
-        for(;;) {
-            if (pic_count == 0)
-                pic_in = pic;
-            else
-                pic_in = NULL;
-            ret = x265_encoder_encode(enc, &p_nal, &nal_count, pic_in, NULL);
-            if (ret < 0)
-                goto fail;
-            if (ret == 1)
-                break;
-            pic_count++;
-        }
-
-        buf_len = 0;
-        for(j = 0; j < nal_count; j++)
-            buf_len += p_nal[j].sizeBytes;
-
-        if (i == 0) {
-            // early exit if 1st pass output smaller than limit
-            if (params->size_limit && buf_len <= bytes_tar)
-                break;
-
-            p->rc.bitrate = params->size * 8 * p->fpsNum/p->fpsDenom;
-            p->rc.rateControlMode = X265_RC_ABR;
-            p->rc.bStatRead = 1;
-            last_enc_size = 0;
-        }
-
-        if (i > 0) {
-            // early exit if multipass is not adjusting output
-            if (fabs(buf_len - last_enc_size) < 1) {
-                fprintf(stderr, "Multipass was %.2lf%% off target size (%d kB)\n",
-                       100 * (buf_len - bytes_tar)/bytes_tar, (int)params->size);
-                break;
-            }
-            last_enc_size = buf_len;
-            // early exit if BPG output can be within tolerance
-            if (fabs(buf_len - bytes_tar) <= bytes_tol)
-                break;
-            else if (i == passes - 1)
-                fprintf(stderr, "Multipass was %.2lf%% off target size (%d kB)\n",
-                       100 * (buf_len - bytes_tar)/bytes_tar, (int)params->size);
+    ret = x265_encoder_encode(s->enc, &p_nal, &nal_count, pic, NULL);
+    if (ret > 0) {
+        for(i = 0; i < nal_count; i++) {
+            add_nal(s, p_nal[i].payload, p_nal[i].sizeBytes);
         }
     }
-
-    buf = malloc(buf_len);
-    idx = 0;
-    for(i = 0; i < nal_count; i++) {
-        /* only allow expected NAL types */
-        if ((p_nal[i].type == 40 && params->sei_decoded_picture_hash)
-            || p_nal[i].type == NAL_UNIT_VPS
-            || p_nal[i].type == NAL_UNIT_SPS
-            || p_nal[i].type == NAL_UNIT_PPS
-            || p_nal[i].type == NAL_UNIT_CODED_SLICE_IDR_W_RADL
-            || p_nal[i].type == NAL_UNIT_CODED_SLICE_IDR_N_LP) {
-            memcpy(buf + idx, p_nal[i].payload, p_nal[i].sizeBytes);
-        }
-        idx += p_nal[i].sizeBytes;
-    }
-
-    x265_encoder_close(enc);
-    x265_param_free(p);
-    x265_picture_free(pic);
-    x265_cleanup();
-
-    unlink(stats_name);
-
-    *pbuf = buf;
-    return buf_len;
- fail:
-    x265_encoder_close(enc);
-    x265_param_free(p);
-    x265_picture_free(pic);
-    x265_cleanup();
-
-    unlink(stats_name);
-
-    *pbuf = NULL;
-    return -1;
+    return 0;
 }
+
+static int x265_close(HEVCEncoderContext *s, uint8_t **pbuf)
+{
+    int buf_len, ret, i;
+    uint32_t nal_count;
+    x265_nal *p_nal;
+
+    /* get last compressed pictures */
+    for(;;) {
+        ret = x265_encoder_encode(s->enc, &p_nal, &nal_count, NULL, NULL);
+        if (ret <= 0)
+            break;
+        for(i = 0; i < nal_count; i++) {
+            add_nal(s, p_nal[i].payload, p_nal[i].sizeBytes);
+        }
+    }
+
+    if (s->buf_len < s->buf_size) {
+        s->buf = realloc(s->buf, s->buf_len);
+    }
+
+    *pbuf = s->buf;
+    buf_len = s->buf_len;
+
+    x265_encoder_close(s->enc);
+    x265_picture_free(s->pic);
+    free(s);
+    return buf_len;
+}
+
+HEVCEncoder x265_hevc_encoder = {
+  .open = x265_open,
+  .encode = x265_encode,
+  .close = x265_close,
+};

@@ -53,7 +53,7 @@ Void  xTraceSEIMessageType(SEI::PayloadType payloadType)
 }
 #endif
 
-Void SEIWriter::xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, const TComSPS *sps)
+Void SEIWriter::xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, TComSPS *sps)
 {
   switch (sei.payloadType())
   {
@@ -131,7 +131,7 @@ Void SEIWriter::xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, const TComSP
  * marshal a single SEI message sei, storing the marshalled representation
  * in bitstream bs.
  */
-Void SEIWriter::writeSEImessage(TComBitIf& bs, const SEI& sei, const TComSPS *sps)
+Void SEIWriter::writeSEImessage(TComBitIf& bs, const SEI& sei, TComSPS *sps)
 {
   /* calculate how large the payload data is */
   /* TODO: this would be far nicer if it used vectored buffers */
@@ -156,9 +156,7 @@ Void SEIWriter::writeSEImessage(TComBitIf& bs, const SEI& sei, const TComSPS *sp
 
 #if ENC_DEC_TRACE
   if (g_HLSTraceEnable)
-  {
-    xTraceSEIHeader();
-  }
+  xTraceSEIHeader();
 #endif
 
   UInt payloadType = sei.payloadType();
@@ -178,9 +176,7 @@ Void SEIWriter::writeSEImessage(TComBitIf& bs, const SEI& sei, const TComSPS *sp
   /* payloadData */
 #if ENC_DEC_TRACE
   if (g_HLSTraceEnable)
-  {
-    xTraceSEIMessageType(sei.payloadType());
-  }
+  xTraceSEIMessageType(sei.payloadType());
 #endif
 
   xWriteSEIpayloadData(bs, sei, sps);
@@ -243,9 +239,9 @@ Void SEIWriter::xWriteSEIActiveParameterSets(const SEIActiveParameterSets& sei)
   }
 }
 
-Void SEIWriter::xWriteSEIDecodingUnitInfo(const SEIDecodingUnitInfo& sei, const TComSPS *sps)
+Void SEIWriter::xWriteSEIDecodingUnitInfo(const SEIDecodingUnitInfo& sei, TComSPS *sps)
 {
-  const TComVUI *vui = sps->getVuiParameters();
+  TComVUI *vui = sps->getVuiParameters();
   WRITE_UVLC(sei.m_decodingUnitIdx, "decoding_unit_idx");
   if(vui->getHrdParameters()->getSubPicCpbParamsInPicTimingSEIFlag())
   {
@@ -258,11 +254,11 @@ Void SEIWriter::xWriteSEIDecodingUnitInfo(const SEIDecodingUnitInfo& sei, const 
   }
 }
 
-Void SEIWriter::xWriteSEIBufferingPeriod(const SEIBufferingPeriod& sei, const TComSPS *sps)
+Void SEIWriter::xWriteSEIBufferingPeriod(const SEIBufferingPeriod& sei, TComSPS *sps)
 {
   Int i, nalOrVcl;
-  const TComVUI *vui = sps->getVuiParameters();
-  const TComHRD *hrd = vui->getHrdParameters();
+  TComVUI *vui = sps->getVuiParameters();
+  TComHRD *hrd = vui->getHrdParameters();
 
   WRITE_UVLC( sei.m_bpSeqParameterSetId, "bp_seq_parameter_set_id" );
   if( !hrd->getSubPicCpbParamsPresentFlag() )
@@ -294,11 +290,11 @@ Void SEIWriter::xWriteSEIBufferingPeriod(const SEIBufferingPeriod& sei, const TC
     }
   }
 }
-Void SEIWriter::xWriteSEIPictureTiming(const SEIPictureTiming& sei, const TComSPS *sps)
+Void SEIWriter::xWriteSEIPictureTiming(const SEIPictureTiming& sei,  TComSPS *sps)
 {
   Int i;
-  const TComVUI *vui = sps->getVuiParameters();
-  const TComHRD *hrd = vui->getHrdParameters();
+  TComVUI *vui = sps->getVuiParameters();
+  TComHRD *hrd = vui->getHrdParameters();
 
   if( vui->getFrameFieldInfoPresentFlag() )
   {
@@ -345,8 +341,7 @@ Void SEIWriter::xWriteSEIFramePacking(const SEIFramePacking& sei)
   WRITE_UVLC( sei.m_arrangementId,                  "frame_packing_arrangement_id" );
   WRITE_FLAG( sei.m_arrangementCancelFlag,          "frame_packing_arrangement_cancel_flag" );
 
-  if( sei.m_arrangementCancelFlag == 0 )
-  {
+  if( sei.m_arrangementCancelFlag == 0 ) {
     WRITE_CODE( sei.m_arrangementType, 7,           "frame_packing_arrangement_type" );
 
     WRITE_FLAG( sei.m_quincunxSamplingFlag,         "quincunx_sampling_flag" );
@@ -505,7 +500,7 @@ Void SEIWriter::xWriteSEISOPDescription(const SEISOPDescription& sei)
   }
 }
 
-Void SEIWriter::xWriteSEIScalableNesting(TComBitIf& bs, const SEIScalableNesting& sei, const TComSPS *sps)
+Void SEIWriter::xWriteSEIScalableNesting(TComBitIf& bs, const SEIScalableNesting& sei, TComSPS *sps)
 {
   WRITE_FLAG( sei.m_bitStreamSubsetFlag,             "bitstream_subset_flag"         );
   WRITE_FLAG( sei.m_nestingOpFlag,                   "nesting_op_flag      "         );
@@ -636,9 +631,7 @@ Void SEIWriter::xWriteSEITimeCode(const SEITimeCode& sei)
             WRITE_CODE(currentTimeSet.minutesValue, 6, "minutes_value");
             WRITE_FLAG(currentTimeSet.hoursFlag, "hours_flag");
             if(currentTimeSet.hoursFlag)
-            {
               WRITE_CODE(currentTimeSet.hoursValue, 5, "hours_value");
-            }
           }
         }
       }

@@ -29,7 +29,9 @@ extern "C" {
 
 typedef struct {
     int w, h;
-    BPGImageFormatEnum format;
+    BPGImageFormatEnum format; /* x_VIDEO values are forbidden here */
+    uint8_t c_h_phase; /* 4:2:2 or 4:2:0 : give the horizontal chroma
+                          position. 0=MPEG2, 1=JPEG. */
     uint8_t has_alpha;
     uint8_t has_w_plane;
     uint8_t limited_range;
@@ -42,28 +44,33 @@ typedef struct {
 } Image;
 
 typedef struct {
-    const char *out_name;
-    double qp; /* quantizer 0-51 */
-    double size; /* 1000s of bytes, >0 */
-    double size_tol; /* 1.0 to 10.0 */
-    double aq_strength; /* 0.0 to 3.0 */
-    double psyrd; /* 0.0 to 2.0 */
-    double psyrdoq; /* 0.0 to 50.0 */
-    int size_limit; /* 0 or 1 */
-    int passes; /* 2 to 10 */
-    int chroma_offset; /* -6 to 6 */
-    int deblocking; /* -6 to 6 */
-    int wpp; /* 0 or 1 */
+    int width;
+    int height;
+    int chroma_format; /* 0-3 */
+    int bit_depth; /* 8-14 */
+    int intra_only; /* 0-1 */
+
+    int qp; /* quantizer 0-51 */
     int lossless; /* 0-1 lossless mode */
     int sei_decoded_picture_hash; /* 0=no hash, 1=MD5 hash */
     int compress_level; /* 1-9 */
     int verbose;
 } HEVCEncodeParams;
 
+typedef struct HEVCEncoderContext HEVCEncoderContext;
+
+typedef struct {
+    HEVCEncoderContext *(*open)(const HEVCEncodeParams *params);
+    int (*encode)(HEVCEncoderContext *s, Image *img);
+    int (*close)(HEVCEncoderContext *s, uint8_t **pbuf);
+} HEVCEncoder;
+
+extern HEVCEncoder jctvc_encoder;
+extern HEVCEncoder x265_hevc_encoder;
+
 int x265_encode_picture(uint8_t **pbuf, Image *img,
                         const HEVCEncodeParams *params);
-int jctvc_encode_picture(uint8_t **pbuf, Image *img,
-                         const HEVCEncodeParams *params);
+void save_yuv1(Image *img, FILE *f);
 void save_yuv(Image *img, const char *filename);
 
 #ifdef __cplusplus

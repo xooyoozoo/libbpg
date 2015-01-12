@@ -52,7 +52,7 @@ TComOutputBitstream bsNALUHeader;
 
   bsNALUHeader.write(0,1);                    // forbidden_zero_bit
   bsNALUHeader.write(nalu.m_nalUnitType, 6);  // nal_unit_type
-  bsNALUHeader.write(nalu.m_nuhLayerId, 6);   // nuh_layer_id
+  bsNALUHeader.write(nalu.m_reservedZero6Bits, 6);                   // nuh_reserved_zero_6bits
   bsNALUHeader.write(nalu.m_temporalId+1, 3); // nuh_temporal_id_plus1
 
   out.write(bsNALUHeader.getByteStream(), bsNALUHeader.getByteStreamLength());
@@ -98,15 +98,7 @@ Void write(ostream& out, OutputNALUnit& nalu)
       outputBuffer[outputAmount++]=emulation_prevention_three_byte[0];
       zeroCount=0;
     }
-
-    if (v==0)
-    {
-      zeroCount++;
-    }
-    else
-    {
-      zeroCount=0;
-    }
+    if (v==0) zeroCount++; else zeroCount=0;
     outputBuffer[outputAmount++]=v;
   }
 
@@ -115,10 +107,7 @@ Void write(ostream& out, OutputNALUnit& nalu)
    * only occur when the RBSP ends in a cabac_zero_word), a final byte equal
    * to 0x03 is appended to the end of the data.
    */
-  if (zeroCount>0)
-  {
-    outputBuffer[outputAmount++]=emulation_prevention_three_byte[0];
-  }
+  if (zeroCount>0) outputBuffer[outputAmount++]=emulation_prevention_three_byte[0];
   out.write((Char*)&(*outputBuffer.begin()), outputAmount);
 }
 

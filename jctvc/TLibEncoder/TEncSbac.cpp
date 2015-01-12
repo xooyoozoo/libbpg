@@ -108,10 +108,10 @@ Void TEncSbac::resetEntropy           ()
   Int  iQp              = m_pcSlice->getSliceQp();
   SliceType eSliceType  = m_pcSlice->getSliceType();
 
-  SliceType encCABACTableIdx = m_pcSlice->getEncCABACTableIdx();
+  Int  encCABACTableIdx = m_pcSlice->getPPS()->getEncCABACTableIdx();
   if (!m_pcSlice->isIntra() && (encCABACTableIdx==B_SLICE || encCABACTableIdx==P_SLICE) && m_pcSlice->getPPS()->getCabacInitPresentFlag())
   {
-    eSliceType = encCABACTableIdx;
+    eSliceType = (SliceType) encCABACTableIdx;
   }
 
   m_cCUSplitFlagSCModel.initBuffer                ( eSliceType, iQp, (UChar*)INIT_SPLIT_FLAG );
@@ -160,7 +160,7 @@ Void TEncSbac::resetEntropy           ()
  * If current slice type is P/B then it determines the distance of initialisation type 1 and 2 from the current CABAC states and
  * stores the index of the closest table.  This index is used for the next P/B slice when cabac_init_present_flag is true.
  */
-SliceType TEncSbac::determineCabacInitIdx()
+Void TEncSbac::determineCabacInitIdx()
 {
   Int  qp              = m_pcSlice->getSliceQp();
 
@@ -213,27 +213,27 @@ SliceType TEncSbac::determineCabacInitIdx()
         bestCost      = curCost;
       }
     }
-    return bestSliceType;
+    m_pcSlice->getPPS()->setEncCABACTableIdx( bestSliceType );
   }
   else
   {
-    return I_SLICE;
+    m_pcSlice->getPPS()->setEncCABACTableIdx( I_SLICE );
   }
 }
 
-Void TEncSbac::codeVPS( const TComVPS* pcVPS )
+Void TEncSbac::codeVPS( TComVPS* pcVPS )
 {
   assert (0);
   return;
 }
 
-Void TEncSbac::codeSPS( const TComSPS* pcSPS )
+Void TEncSbac::codeSPS( TComSPS* pcSPS )
 {
   assert (0);
   return;
 }
 
-Void TEncSbac::codePPS( const TComPPS* pcPPS )
+Void TEncSbac::codePPS( TComPPS* pcPPS )
 {
   assert (0);
   return;
@@ -402,13 +402,9 @@ Void  TEncSbac::loadIntraDirMode( const TEncSbac* pSrc, const ChannelType chType
 {
   m_pcBinIf->copyState( pSrc->m_pcBinIf );
   if (isLuma(chType))
-  {
     this->m_cCUIntraPredSCModel      .copyFrom( &pSrc->m_cCUIntraPredSCModel       );
-  }
   else
-  {
     this->m_cCUChromaPredSCModel     .copyFrom( &pSrc->m_cCUChromaPredSCModel      );
-  }
 }
 
 
@@ -458,7 +454,7 @@ Void TEncSbac::codePartSize( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
     {
       m_pcBinIf->encodeBin( 0, m_cCUPartSizeSCModel.get( 0, 0, 0) );
       m_pcBinIf->encodeBin( 1, m_cCUPartSizeSCModel.get( 0, 0, 1) );
-      if ( pcCU->getSlice()->getSPS()->getUseAMP() && uiDepth < g_uiMaxCUDepth-g_uiAddCUDepth )
+      if ( pcCU->getSlice()->getSPS()->getAMPAcc( uiDepth ) )
       {
         if (eSize == SIZE_2NxN)
         {
@@ -484,7 +480,7 @@ Void TEncSbac::codePartSize( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
         m_pcBinIf->encodeBin( 1, m_cCUPartSizeSCModel.get( 0, 0, 2) );
       }
 
-      if ( pcCU->getSlice()->getSPS()->getUseAMP() && uiDepth < g_uiMaxCUDepth-g_uiAddCUDepth )
+      if ( pcCU->getSlice()->getSPS()->getAMPAcc( uiDepth ) )
       {
         if (eSize == SIZE_Nx2N)
         {
@@ -612,9 +608,7 @@ Void TEncSbac::codeMergeIndex( TComDataCU* pcCU, UInt uiAbsPartIdx )
 Void TEncSbac::codeSplitFlag   ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
 {
   if( uiDepth == g_uiMaxCUDepth - g_uiAddCUDepth )
-  {
     return;
-  }
 
   UInt uiCtx           = pcCU->getCtxSplitFlag( uiAbsPartIdx, uiDepth );
   UInt uiCurrSplitFlag = ( pcCU->getDepth( uiAbsPartIdx ) > uiDepth ) ? 1 : 0;
@@ -643,15 +637,15 @@ Void TEncSbac::codeIntraDirLumaAng( TComDataCU* pcCU, UInt absPartIdx, Bool isMu
 {
   UInt dir[4],j;
   Int preds[4][NUM_MOST_PROBABLE_MODES] = {{-1, -1, -1},{-1, -1, -1},{-1, -1, -1},{-1, -1, -1}};
-  Int predIdx[4] ={ -1,-1,-1,-1};
+  Int predNum[4], predIdx[4] ={ -1,-1,-1,-1};
   PartSize mode = pcCU->getPartitionSize( absPartIdx );
   UInt partNum = isMultiple?(mode==SIZE_NxN?4:1):1;
   UInt partOffset = ( pcCU->getPic()->getNumPartitionsInCtu() >> ( pcCU->getDepth(absPartIdx) << 1 ) ) >> 2;
   for (j=0;j<partNum;j++)
   {
     dir[j] = pcCU->getIntraDir( CHANNEL_TYPE_LUMA, absPartIdx+partOffset*j );
-    pcCU->getIntraDirPredictor(absPartIdx+partOffset*j, preds[j], COMPONENT_Y);
-    for(UInt i = 0; i < NUM_MOST_PROBABLE_MODES; i++)
+    predNum[j] = pcCU->getIntraDirPredictor(absPartIdx+partOffset*j, preds[j], COMPONENT_Y);
+    for(UInt i = 0; i < predNum[j]; i++)
     {
       if(dir[j] == preds[j][i])
       {
@@ -672,6 +666,7 @@ Void TEncSbac::codeIntraDirLumaAng( TComDataCU* pcCU, UInt absPartIdx, Bool isMu
     }
     else
     {
+      assert(predNum[j]>=3); // It is currently always 3!
       if (preds[j][0] > preds[j][1])
       {
         std::swap(preds[j][0], preds[j][1]);
@@ -684,7 +679,7 @@ Void TEncSbac::codeIntraDirLumaAng( TComDataCU* pcCU, UInt absPartIdx, Bool isMu
       {
         std::swap(preds[j][1], preds[j][2]);
       }
-      for(Int i = (Int(NUM_MOST_PROBABLE_MODES) - 1); i >= 0; i--)
+      for(Int i = (predNum[j] - 1); i >= 0; i--)
       {
         dir[j] = dir[j] > preds[j][i] ? dir[j] - 1 : dir[j];
       }
@@ -833,10 +828,7 @@ Void TEncSbac::codeCrossComponentPrediction( TComTU &rTu, ComponentID compID )
 {
   TComDataCU *pcCU = rTu.getCU();
 
-  if( isLuma(compID) || !pcCU->getSlice()->getPPS()->getUseCrossComponentPrediction() )
-  {
-    return;
-  }
+  if( isLuma(compID) || !pcCU->getSlice()->getPPS()->getUseCrossComponentPrediction() ) return;
 
   const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
 
@@ -1266,13 +1258,11 @@ Void TEncSbac::codeCoeffNxN( TComTU &rTu, TCoeff* pcCoef, const ComponentID comp
     {
       beValid = false;
       if ( (!pcCU->isIntra(uiAbsPartIdx)) && pcCU->isRDPCMEnabled(uiAbsPartIdx))
-      {
         codeExplicitRdpcmMode( rTu, compID);
-      }
     }
     else
     {
-      beValid = pcCU->getSlice()->getPPS()->getSignHideFlag();
+      beValid = pcCU->getSlice()->getPPS()->getSignHideFlag() > 0;
     }
   }
 
@@ -1328,7 +1318,8 @@ Void TEncSbac::codeCoeffNxN( TComTU &rTu, TCoeff* pcCoef, const ComponentID comp
 
       uiNumSig--;
     }
-  } while ( uiNumSig > 0 );
+  }
+  while ( uiNumSig > 0 );
 
   // Code position of last coefficient
   Int posLastY = posLast >> uiLog2BlockWidth;

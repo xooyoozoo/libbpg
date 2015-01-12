@@ -427,9 +427,7 @@ Void fastForwardDst(TCoeff *block, TCoeff *coeff, Int shift)  // input block, ou
     {
       TCoeff result = 0;
       for (Int column = 0; column < 4; column++)
-      {
         result += c[column] * g_as_DST_MAT_4[TRANSFORM_FORWARD][row][column]; // use the defined matrix, rather than hard-wired numbers
-      }
 
       coeff[(row * 4) + i] = rightShift((result + rnd_factor), shift);
     }
@@ -455,9 +453,7 @@ Void fastInverseDst(TCoeff *tmp, TCoeff *block, Int shift, const TCoeff outputMi
 
       result = 0;
       for (Int row = 0; row < 4; row++)
-      {
         result += c[row] * g_as_DST_MAT_4[TRANSFORM_INVERSE][row][column]; // use the defined matrix, rather than hard-wired numbers
-      }
 
       result = Clip3( outputMinimum, outputMaximum, rightShift((result + rnd_factor), shift));
     }
@@ -857,10 +853,7 @@ Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight,
         {
            fastForwardDst( block, tmp, shift_1st );
         }
-        else
-        {
-          partialButterfly4 ( block, tmp, shift_1st, iHeight );
-        }
+        else partialButterfly4 ( block, tmp, shift_1st, iHeight );
       }
       break;
 
@@ -879,10 +872,7 @@ Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight,
         {
           fastForwardDst( tmp, coeff, shift_2nd );
         }
-        else
-        {
-          partialButterfly4 ( tmp, coeff, shift_2nd, iWidth );
-        }
+        else partialButterfly4 ( tmp, coeff, shift_2nd, iWidth );
       }
       break;
 
@@ -923,10 +913,7 @@ Void xITrMxN(Int bitDepth, TCoeff *coeff, TCoeff *block, Int iWidth, Int iHeight
         {
           fastInverseDst( coeff, tmp, shift_1st, clipMinimum, clipMaximum);
         }
-        else
-        {
-          partialButterflyInverse4 ( coeff, tmp, shift_1st, iWidth, clipMinimum, clipMaximum);
-        }
+        else partialButterflyInverse4 ( coeff, tmp, shift_1st, iWidth, clipMinimum, clipMaximum);
       }
       break;
 
@@ -947,10 +934,7 @@ Void xITrMxN(Int bitDepth, TCoeff *coeff, TCoeff *block, Int iWidth, Int iHeight
         {
           fastInverseDst( tmp, block, shift_2nd, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max() );
         }
-        else
-        {
-          partialButterflyInverse4 ( tmp, block, shift_2nd, iHeight, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max());
-        }
+        else partialButterflyInverse4 ( tmp, block, shift_2nd, iHeight, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max());
       }
       break;
 
@@ -1471,7 +1455,8 @@ Void TComTrQuant::invTransformNxN(      TComTU        &rTu,
 
       //------------------
 
-    } while (subTURecurse.nextSection(rTu));
+    }
+    while (subTURecurse.nextSection(rTu));
 
     //------------------------------------------------
 
@@ -1566,10 +1551,7 @@ Void TComTrQuant::invRecurTransformNxN( const ComponentID compID,
                                         TComYuv *pResidual,
                                         TComTU &rTu)
 {
-  if (!rTu.ProcessComponentSection(compID))
-  {
-    return;
-  }
+  if (!rTu.ProcessComponentSection(compID)) return;
 
   TComDataCU* pcCU = rTu.getCU();
   UInt absPartIdxTU = rTu.GetAbsPartIdxTU();
@@ -1601,9 +1583,7 @@ Void TComTrQuant::invRecurTransformNxN( const ComponentID compID,
 
 #ifdef DEBUG_STRING
       if (psDebug != 0)
-      {
         std::cout << (*psDebug);
-      }
 #endif
     }
 
@@ -1629,7 +1609,8 @@ Void TComTrQuant::invRecurTransformNxN( const ComponentID compID,
     do
     {
       invRecurTransformNxN( compID, pResidual, tuRecurseChild );
-    } while (tuRecurseChild.nextSection(rTu));
+    }
+    while (tuRecurseChild.nextSection(rTu));
   }
 }
 
@@ -1649,26 +1630,26 @@ Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel*
   UInt uiX = 0;
   UInt uiY = 0;
 
-        UInt &majorAxis             = (mode == RDPCM_VER) ? uiX      : uiY;
-        UInt &minorAxis             = (mode == RDPCM_VER) ? uiY      : uiX;
-  const UInt  majorAxisLimit        = (mode == RDPCM_VER) ? uiWidth  : uiHeight;
-  const UInt  minorAxisLimit        = (mode == RDPCM_VER) ? uiHeight : uiWidth;
-  static const TCoeff pelMin=(Int) std::numeric_limits<Pel>::min();
-  static const TCoeff pelMax=(Int) std::numeric_limits<Pel>::max();
+        UInt &majorAxis             = (mode == RDPCM_HOR) ? uiX      : uiY;
+        UInt &minorAxis             = (mode == RDPCM_HOR) ? uiY      : uiX;
+  const UInt  majorAxisLimit        = (mode == RDPCM_HOR) ? uiWidth  : uiHeight;
+  const UInt  minorAxisLimit        = (mode == RDPCM_HOR) ? uiHeight : uiWidth;
+  const UInt  referenceSampleOffset = (mode == RDPCM_HOR) ? 1        : uiWidth;
 
-  const Bool bUseHalfRoundingPoint  = (mode != RDPCM_OFF);
+  const Bool bUseHalfRoundingPoint = (mode != RDPCM_OFF);
 
   uiAbsSum = 0;
 
   for ( majorAxis = 0; majorAxis < majorAxisLimit; majorAxis++ )
   {
-    TCoeff accumulatorValue = 0; // 32-bit accumulator
     for ( minorAxis = 0; minorAxis < minorAxisLimit; minorAxis++ )
     {
       const UInt sampleIndex      = (uiY * uiWidth) + uiX;
       const UInt coefficientIndex = (rotateResidual ? (uiSizeMinus1-sampleIndex) : sampleIndex);
       const Pel  currentSample    = pcResidual[(uiY * uiStride) + uiX];
-      const TCoeff encoderSideDelta = TCoeff(currentSample) - accumulatorValue;
+      const Pel  referenceSample  = ((mode != RDPCM_OFF) && (majorAxis > 0)) ? reconstructedResi[sampleIndex - referenceSampleOffset] : 0;
+
+      const Pel  encoderSideDelta = currentSample - referenceSample;
 
       Pel reconstructedDelta;
       if ( bLossless )
@@ -1684,15 +1665,7 @@ Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel*
 
       uiAbsSum += abs(pcCoeff[coefficientIndex]);
 
-      if (mode == RDPCM_OFF)
-      {
-        reconstructedResi[sampleIndex] = reconstructedDelta;
-      }
-      else
-      {
-        accumulatorValue += reconstructedDelta;
-        reconstructedResi[sampleIndex] = (Pel) Clip3<TCoeff>(pelMin, pelMax, accumulatorValue);
-      }
+      reconstructedResi[sampleIndex] = reconstructedDelta + referenceSample;
     }
   }
 }
@@ -1719,10 +1692,7 @@ Void TComTrQuant::rdpcmNxN   ( TComTU& rTu, const ComponentID compID, Pel* pcRes
       rdpcmMode = (uiChFinalMode == VER_IDX) ? RDPCM_VER : RDPCM_HOR;
       applyForwardRDPCM( rTu, compID, pcResidual, uiStride, cQP, pcCoeff, uiAbsSum, rdpcmMode );
     }
-    else
-    {
-      rdpcmMode = RDPCM_OFF;
-    }
+    else rdpcmMode = RDPCM_OFF;
   }
   else // not intra, need to select the best mode
   {
@@ -1794,34 +1764,28 @@ Void TComTrQuant::invRdpcmNxN( TComTU& rTu, const ComponentID compID, Pel* pcRes
       rdpcmMode = RDPCMMode(pcCU->getExplicitRdpcmMode( compID, uiAbsPartIdx ));
     }
 
-    static const TCoeff pelMin=(TCoeff) std::numeric_limits<Pel>::min();
-    static const TCoeff pelMax=(TCoeff) std::numeric_limits<Pel>::max();
     if (rdpcmMode == RDPCM_VER)
     {
-      for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+      pcResidual += uiStride; //start from row 1
+
+      for( UInt uiY = 1; uiY < uiHeight; uiY++ )
       {
-        Pel *pcCurResidual = pcResidual+uiX;
-        TCoeff accumulator = *pcCurResidual; // 32-bit accumulator
-        pcCurResidual+=uiStride;
-        for( UInt uiY = 1; uiY < uiHeight; uiY++, pcCurResidual+=uiStride )
+        for( UInt uiX = 0; uiX < uiWidth; uiX++ )
         {
-          accumulator += *(pcCurResidual);
-          *pcCurResidual = (Pel)Clip3<TCoeff>(pelMin, pelMax, accumulator);
+          pcResidual[ uiX ] = pcResidual[ uiX ] + pcResidual [ (Int)uiX - (Int)uiStride ];
         }
+        pcResidual += uiStride;
       }
     }
     else if (rdpcmMode == RDPCM_HOR)
     {
       for( UInt uiY = 0; uiY < uiHeight; uiY++ )
       {
-        Pel *pcCurResidual = pcResidual+uiY*uiStride;
-        TCoeff accumulator = *pcCurResidual;
-        pcCurResidual++;
-        for( UInt uiX = 1; uiX < uiWidth; uiX++, pcCurResidual++ )
+        for( UInt uiX = 1; uiX < uiWidth; uiX++ )
         {
-          accumulator += *(pcCurResidual);
-          *pcCurResidual = (Pel)Clip3<TCoeff>(pelMin, pelMax, accumulator);
+          pcResidual[ uiX ] = pcResidual[ uiX ] + pcResidual [ (Int)uiX-1 ];
         }
+        pcResidual += uiStride;
       }
     }
   }
@@ -1852,12 +1816,10 @@ Void TComTrQuant::xT( const ComponentID compID, Bool useDST, Pel* piBlkResi, UIn
   TCoeff coeff[ MAX_TU_SIZE * MAX_TU_SIZE ];
 
   for (Int y = 0; y < iHeight; y++)
-  {
     for (Int x = 0; x < iWidth; x++)
     {
       block[(y * iWidth) + x] = piBlkResi[(y * uiStride) + x];
     }
-  }
 
   xTrMxN( g_bitDepth[toChannelType(compID)], block, coeff, iWidth, iHeight, useDST, g_maxTrDynamicRange[toChannelType(compID)] );
 
@@ -1897,12 +1859,10 @@ Void TComTrQuant::xIT( const ComponentID compID, Bool useDST, TCoeff* plCoef, Pe
 #endif
 
   for (Int y = 0; y < iHeight; y++)
-  {
     for (Int x = 0; x < iWidth; x++)
     {
       pResidual[(y * uiStride) + x] = Pel(block[(y * iWidth) + x]);
     }
-  }
 }
 
 /** Wrapper function between HM interface and core 4x4 transform skipping
@@ -2365,10 +2325,7 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
       {
         iScanPos = iCGScanPos*uiCGSize + iScanPosinCG;
 
-        if (iScanPos > iLastScanPos)
-        {
-          continue;
-        }
+        if (iScanPos > iLastScanPos) continue;
         UInt   uiBlkPos     = codingParameters.scan[iScanPos];
 
         if( piDstCoeff[ uiBlkPos ] )
@@ -2564,10 +2521,7 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
  */
 Int  TComTrQuant::calcPatternSigCtx( const UInt* sigCoeffGroupFlag, UInt uiCGPosX, UInt uiCGPosY, UInt widthInGroups, UInt heightInGroups )
 {
-  if ((widthInGroups <= 1) && (heightInGroups <= 1))
-  {
-    return 0;
-  }
+  if ((widthInGroups <= 1) && (heightInGroups <= 1)) return 0;
 
   const Bool rightAvailable = uiCGPosX < (widthInGroups  - 1);
   const Bool belowAvailable = uiCGPosY < (heightInGroups - 1);
@@ -2575,14 +2529,8 @@ Int  TComTrQuant::calcPatternSigCtx( const UInt* sigCoeffGroupFlag, UInt uiCGPos
   UInt sigRight = 0;
   UInt sigLower = 0;
 
-  if (rightAvailable)
-  {
-    sigRight = ((sigCoeffGroupFlag[ (uiCGPosY * widthInGroups) + uiCGPosX + 1 ] != 0) ? 1 : 0);
-  }
-  if (belowAvailable)
-  {
-    sigLower = ((sigCoeffGroupFlag[ (uiCGPosY + 1) * widthInGroups + uiCGPosX ] != 0) ? 1 : 0);
-  }
+  if (rightAvailable) sigRight = ((sigCoeffGroupFlag[ (uiCGPosY * widthInGroups) + uiCGPosX + 1 ] != 0) ? 1 : 0);
+  if (belowAvailable) sigLower = ((sigCoeffGroupFlag[ (uiCGPosY + 1) * widthInGroups + uiCGPosX ] != 0) ? 1 : 0);
 
   return sigRight + (sigLower << 1);
 }
@@ -2614,10 +2562,7 @@ Int TComTrQuant::getSigCtxInc    (       Int                        patternSigCt
   const UInt posY           = rasterPosition >> log2BlockWidth;
   const UInt posX           = rasterPosition - (posY << log2BlockWidth);
 
-  if ((posX + posY) == 0)
-  {
-    return 0; //special case for the DC context variable
-  }
+  if ((posX + posY) == 0) return 0; //special case for the DC context variable
 
   Int offset = MAX_INT;
 
@@ -2933,14 +2878,8 @@ UInt TComTrQuant::getSigCoeffGroupCtxInc  (const UInt*  uiSigCoeffGroupFlag,
   UInt sigRight = 0;
   UInt sigLower = 0;
 
-  if (uiCGPosX < (widthInGroups  - 1))
-  {
-    sigRight = ((uiSigCoeffGroupFlag[ (uiCGPosY * widthInGroups) + uiCGPosX + 1 ] != 0) ? 1 : 0);
-  }
-  if (uiCGPosY < (heightInGroups - 1))
-  {
-    sigLower = ((uiSigCoeffGroupFlag[ (uiCGPosY + 1) * widthInGroups + uiCGPosX ] != 0) ? 1 : 0);
-  }
+  if (uiCGPosX < (widthInGroups  - 1)) sigRight = ((uiSigCoeffGroupFlag[ (uiCGPosY * widthInGroups) + uiCGPosX + 1 ] != 0) ? 1 : 0);
+  if (uiCGPosY < (heightInGroups - 1)) sigLower = ((uiSigCoeffGroupFlag[ (uiCGPosY + 1) * widthInGroups + uiCGPosX ] != 0) ? 1 : 0);
 
   return ((sigRight + sigLower) != 0) ? 1 : 0;
 }
@@ -2961,7 +2900,7 @@ Void TComTrQuant::setScalingList(TComScalingList *scalingList, const ChromaForma
       for(Int qp = minimumQp; qp < maximumQp; qp++)
       {
         xSetScalingListEnc(scalingList,list,size,qp,format);
-        xSetScalingListDec(*scalingList,list,size,qp,format);
+        xSetScalingListDec(scalingList,list,size,qp,format);
         setErrScaleCoeff(list,size,qp);
       }
     }
@@ -2970,7 +2909,7 @@ Void TComTrQuant::setScalingList(TComScalingList *scalingList, const ChromaForma
 /** set quantized matrix coefficient for decode
  * \param scalingList quantaized matrix address
  */
-Void TComTrQuant::setScalingListDec(const TComScalingList &scalingList, const ChromaFormat format)
+Void TComTrQuant::setScalingListDec(TComScalingList *scalingList, const ChromaFormat format)
 {
   const Int minimumQp = 0;
   const Int maximumQp = SCALING_LIST_REM_NUM;
@@ -3046,13 +2985,13 @@ Void TComTrQuant::xSetScalingListEnc(TComScalingList *scalingList, UInt listId, 
  * \param size size index
  * \param uiQP Quantization parameter
  */
-Void TComTrQuant::xSetScalingListDec(const TComScalingList &scalingList, UInt listId, UInt sizeId, Int qp, const ChromaFormat format)
+Void TComTrQuant::xSetScalingListDec(TComScalingList *scalingList, UInt listId, UInt sizeId, Int qp, const ChromaFormat format)
 {
   UInt width  = g_scalingListSizeX[sizeId];
   UInt height = g_scalingListSizeX[sizeId];
   UInt ratio  = g_scalingListSizeX[sizeId]/min(MAX_MATRIX_SIZE_NUM,(Int)g_scalingListSizeX[sizeId]);
   Int *dequantcoeff;
-  const Int *coeff  = scalingList.getScalingListAddress(sizeId,listId);
+  Int *coeff  = scalingList->getScalingListAddress(sizeId,listId);
 
   dequantcoeff = getDequantCoeff(listId, qp, sizeId);
 
@@ -3063,7 +3002,7 @@ Void TComTrQuant::xSetScalingListDec(const TComScalingList &scalingList, UInt li
                         invQuantScale,
                         height, width, ratio,
                         min(MAX_MATRIX_SIZE_NUM, (Int)g_scalingListSizeX[sizeId]),
-                        scalingList.getScalingListDC(sizeId,listId));
+                        scalingList->getScalingListDC(sizeId,listId));
 }
 
 /** set flat matrix value to quantized coefficient
@@ -3146,7 +3085,7 @@ Void TComTrQuant::processScalingListEnc( Int *coeff, Int *quantcoeff, Int quantS
  * \param sizuNum matrix size
  * \param dc dc parameter
  */
-Void TComTrQuant::processScalingListDec( const Int *coeff, Int *dequantcoeff, Int invQuantScales, UInt height, UInt width, UInt ratio, Int sizuNum, UInt dc)
+Void TComTrQuant::processScalingListDec( Int *coeff, Int *dequantcoeff, Int invQuantScales, UInt height, UInt width, UInt ratio, Int sizuNum, UInt dc)
 {
   for(UInt j=0;j<height;j++)
   {
@@ -3190,24 +3129,15 @@ Void TComTrQuant::destroyScalingList()
     {
       for(UInt qp = 0; qp < SCALING_LIST_REM_NUM; qp++)
       {
-        if(m_quantCoef[sizeId][listId][qp])
-        {
-          delete [] m_quantCoef[sizeId][listId][qp];
-        }
-        if(m_dequantCoef[sizeId][listId][qp])
-        {
-          delete [] m_dequantCoef[sizeId][listId][qp];
-        }
-        if(m_errScale[sizeId][listId][qp])
-        {
-          delete [] m_errScale[sizeId][listId][qp];
-        }
+        if(m_quantCoef   [sizeId][listId][qp]) delete [] m_quantCoef   [sizeId][listId][qp];
+        if(m_dequantCoef [sizeId][listId][qp]) delete [] m_dequantCoef [sizeId][listId][qp];
+        if(m_errScale    [sizeId][listId][qp]) delete [] m_errScale    [sizeId][listId][qp];
       }
     }
   }
 }
 
-Void TComTrQuant::transformSkipQuantOneSample(TComTU &rTu, const ComponentID compID, const TCoeff resiDiff, TCoeff* pcCoeff, const UInt uiPos, const QpParam &cQP, const Bool bUseHalfRoundingPoint)
+Void TComTrQuant::transformSkipQuantOneSample(TComTU &rTu, const ComponentID compID, const Pel resiDiff, TCoeff* pcCoeff, const UInt uiPos, const QpParam &cQP, const Bool bUseHalfRoundingPoint)
 {
         TComDataCU    *pcCU                           = rTu.getCU();
   const UInt           uiAbsPartIdx                   = rTu.GetAbsPartIdxTU();
@@ -3374,38 +3304,23 @@ Void TComTrQuant::crossComponentPrediction(       TComTU      & rTu,
         Pel *pResiT = piResiT;
 
   TComDataCU *pCU = rTu.getCU();
-  const Int alpha = pCU->getCrossComponentPredictionAlpha( rTu.GetAbsPartIdxTU( compID ), compID );
+  const Char alpha = pCU->getCrossComponentPredictionAlpha( rTu.GetAbsPartIdxTU( compID ), compID );
   const Int diffBitDepth = pCU->getSlice()->getSPS()->getDifferentialLumaChromaBitDepth();
 
   for( Int y = 0; y < height; y++ )
   {
     if (reverse)
     {
-      // A constraint is to be added to the HEVC Standard to limit the size of pResiL and pResiC at this point.
-      // The likely form of the constraint is to either restrict the values to CoeffMin to CoeffMax,
-      // or to be representable in a bitDepthY+4 or bitDepthC+4 signed integer.
-      //  The result of the constraint is that for 8/10/12bit profiles, the input values
-      //  can be represented within a 16-bit Pel-type.
-#if RExt__HIGH_BIT_DEPTH_SUPPORT
       for( Int x = 0; x < width; x++ )
       {
         pResiT[x] = pResiC[x] + (( alpha * rightShift( pResiL[x], diffBitDepth) ) >> 3);
       }
-#else
-      const Int minPel=std::numeric_limits<Pel>::min();
-      const Int maxPel=std::numeric_limits<Pel>::max();
-      for( Int x = 0; x < width; x++ )
-      {
-        pResiT[x] = Clip3<Int>(minPel, maxPel, pResiC[x] + (( alpha * rightShift<Int>(Int(pResiL[x]), diffBitDepth) ) >> 3));
-      }
-#endif
     }
     else
     {
-      // Forward does not need clipping. Pel type should always be big enough.
       for( Int x = 0; x < width; x++ )
       {
-        pResiT[x] = pResiC[x] - (( alpha * rightShift<Int>(Int(pResiL[x]), diffBitDepth) ) >> 3);
+        pResiT[x] = pResiC[x] - (( alpha * rightShift(pResiL[x], diffBitDepth) ) >> 3);
       }
     }
 

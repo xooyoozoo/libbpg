@@ -175,9 +175,7 @@ namespace df
         ~Names()
         {
           if (opt)
-          {
             delete opt;
-          }
         }
         std::list<std::string> opt_long;
         std::list<std::string> opt_short;

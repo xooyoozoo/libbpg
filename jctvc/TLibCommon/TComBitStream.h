@@ -221,8 +221,6 @@ public:
   UInt      getEmulationPreventionByteLocation  ( UInt idx )                  { return m_emulationPreventionByteLocation[ idx ];    }
   Void      clearEmulationPreventionByteLocation()                            { m_emulationPreventionByteLocation.clear();          }
   Void      setEmulationPreventionByteLocation  ( std::vector<UInt> vec )     { m_emulationPreventionByteLocation = vec;            }
-
-  const std::vector<uint8_t> *getFifo() const { return m_fifo; }
 };
 
 //! \}

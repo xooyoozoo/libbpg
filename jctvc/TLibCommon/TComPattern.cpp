@@ -175,10 +175,8 @@ Void TComPrediction::initAdiPatternChType( TComTU &rTu, Bool& bAbove, Bool& bLef
         for (UInt x=0; x<uiROIWidth; x++)
         {
           if (x==0 || y==0)
-          {
             ss << piAdiTemp[y*uiROIWidth + x] << ", ";
 //          if (x%16==15) ss << "\nPart size: ~ ";
-          }
         }
         ss << "\n";
       }
@@ -211,9 +209,7 @@ Void TComPrediction::initAdiPatternChType( TComTU &rTu, Bool& bAbove, Bool& bLef
         const Bool bilinearLeft  = abs((bottomLeft + topLeft ) - (2 * piAdiTemp[stride * uiTuHeight])) < threshold; //difference between the
         const Bool bilinearAbove = abs((topLeft    + topRight) - (2 * piAdiTemp[         uiTuWidth ])) < threshold; //ends and the middle
         if ((uiTuWidth < 32) || (!bilinearLeft) || (!bilinearAbove))
-        {
           useStrongIntraSmoothing = false;
-        }
       }
 
       *piDestPtr = *piSrcPtr; // bottom left is not filtered
@@ -295,10 +291,8 @@ Void TComPrediction::initAdiPatternChType( TComTU &rTu, Bool& bAbove, Bool& bLef
         for (UInt x=0; x<uiROIWidth; x++)
         {
           if (x==0 || y==0)
-          {
             ss << m_piYuvExt[compID][PRED_BUF_FILTERED][y*uiROIWidth + x] << ", ";
 //          if (x%16==15) ss << "\nPart size: ~ ";
-          }
         }
         ss << "\n";
       }

@@ -48,7 +48,6 @@
 #include "version.h"
 #include <stdlib.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <limits.h>
 #include <float.h>
 #if CONFIG_ICONV
@@ -261,7 +260,7 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
 
 int av_image_check_size(unsigned int w, unsigned int h, int log_offset, void *log_ctx)
 {
-    if ((int)w>0 && (int)h>0 && (w+128) < (INTPTR_MAX/8) / (h + 128))
+    if ((int)w>0 && (int)h>0 && (w+128) < (INT_MAX/8) / (h + 128))
         return 0;
     else
         return AVERROR(EINVAL);

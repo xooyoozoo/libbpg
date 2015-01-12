@@ -128,10 +128,7 @@ EnvVar::EnvVar(const std::string &sName, const std::string &sDefault, const std:
     m_bSet = true;
     getEnvVarInUse().push_back(this);
   }
-  else
-  {
-    m_sVal = sDefault;
-  }
+  else m_sVal = sDefault;
 
   m_dVal = strtod(m_sVal.c_str(), 0);
   m_iVal = Int(m_dVal);
@@ -217,18 +214,12 @@ Void printSBACCoeffData(  const UInt          lastX,
 {
   if (DebugOptionList::DebugSBAC.getInt()!=0 && finalEncode)
   {
-    std::cout << "Size: " << width << "x" << height << ", Last X/Y: (" << lastX << ", " << lastY << "), absPartIdx: " << absPart << ", scanIdx: " << scanIdx << ", chan: " << chan << "\n";
+    std::cout << "Size: " << width << "x" << height << ", Last X/Y: (" << lastX << ", " << lastY << "), absPartIdx: " << absPart << ", scanIdx: " << scanIdx << ", chan: " << chan << std::endl;
     for (Int i=0; i<width*height; i++)
     {
       std::cout << std::setw(3) << pCoeff[i];// + dcVal;
-      if (i%width == width-1)
-      {
-        std::cout << "\n";
-      }
-      else
-      {
-        std::cout << ",";
-      }
+      if (i%width == width-1) std::cout << std::endl;
+      else                    std::cout << ",";
     }
     std::cout << std::endl;
   }
@@ -294,25 +285,16 @@ std::string splitOnSettings(const std::string &input)
     //find the " = " that is used to define each setting
     std::string::size_type equalsPosition = result.find(" = ", searchFromPosition);
 
-    if (equalsPosition == std::string::npos)
-    {
-      break;
-    }
+    if (equalsPosition == std::string::npos) break;
 
     //then find the end of the numeric characters
     std::string::size_type splitPosition = result.find_last_of("1234567890", equalsPosition);
 
     //then find the last space before the first numeric character...
-    if (splitPosition != std::string::npos)
-    {
-      splitPosition = result.find_last_of(' ', splitPosition);
-    }
+    if (splitPosition != std::string::npos) splitPosition = result.find_last_of(' ', splitPosition);
 
     //...and replace it with a new line
-    if (splitPosition != std::string::npos)
-    {
-      result.replace(splitPosition, 1, 1, '\n');
-    }
+    if (splitPosition != std::string::npos) result.replace(splitPosition, 1, 1, '\n');
 
     //start the next search from the end of the " = " string
     searchFromPosition = (equalsPosition + 3);
@@ -324,10 +306,7 @@ std::string splitOnSettings(const std::string &input)
 
 std::string lineWrap(const std::string &input, const UInt maximumLineLength)
 {
-  if (maximumLineLength == 0)
-  {
-    return input;
-  }
+  if (maximumLineLength == 0) return input;
   std::string result = input;
 
   std::string::size_type lineStartPosition = result.find_first_not_of(' '); //don't wrap any leading spaces in the string
@@ -338,10 +317,7 @@ std::string lineWrap(const std::string &input, const UInt maximumLineLength)
 
     const std::string::size_type searchFromPosition = lineStartPosition + maximumLineLength;
 
-    if (searchFromPosition >= result.length())
-    {
-      break;
-    }
+    if (searchFromPosition >= result.length()) break;
 
     //------------------------------------------------
 
@@ -350,20 +326,13 @@ std::string lineWrap(const std::string &input, const UInt maximumLineLength)
     std::string::size_type nextLineStartPosition = std::string::npos;
     for (std::string::size_type currentPosition = lineStartPosition; currentPosition <= searchFromPosition; currentPosition++)
     {
-      if (result[currentPosition] == '\n')
-      {
-        nextLineStartPosition = currentPosition + 1;
-        break;
-      }
+      if (result[currentPosition] == '\n') { nextLineStartPosition = currentPosition + 1; break; }
     }
 
     //------------------------------------------------
 
     //if there ia another new line character before the maximum line length, we need to start this loop again from that position
-    if (nextLineStartPosition != std::string::npos)
-    {
-      lineStartPosition = nextLineStartPosition;
-    }
+    if (nextLineStartPosition != std::string::npos) lineStartPosition = nextLineStartPosition;
     else
     {
       std::string::size_type spacePosition = std::string::npos;
@@ -371,11 +340,7 @@ std::string lineWrap(const std::string &input, const UInt maximumLineLength)
       //search backwards for the last space character (must use signed Int because lineStartPosition can be 0)
       for (Int currentPosition = Int(searchFromPosition); currentPosition >= Int(lineStartPosition); currentPosition--)
       {
-        if (result[currentPosition] == ' ')
-        {
-          spacePosition = currentPosition;
-          break;
-        }
+        if (result[currentPosition] == ' ') { spacePosition = currentPosition; break; }
       }
 
       //if we didn't find a space searching backwards, we must hyphenate
@@ -407,10 +372,7 @@ std::string indentNewLines(const std::string &input, const UInt indentBy)
 
   while ((offset = result.find('\n', offset)) != std::string::npos)
   {
-    if ((++offset) >= result.length())
-    {
-      break; //increment offset so we don't find the same \n again and do no indentation at the end
-    }
+    if ((++offset) >= result.length()) break; //increment offset so we don't find the same \n again and do no indentation at the end
     result.insert(offset, indentString);
   }
 
@@ -439,17 +401,13 @@ Void printBlockToStream( std::ostream &ss, const Char *pLinePrefix, TComYuv &src
     for (UInt y=0; y<height; y++)
     {
       if ((y%subBlockHeight)==0 && y!=0)
-      {
         ss << pLinePrefix << '\n';
-      }
 
       ss << pLinePrefix;
       for (UInt x=0; x<width; x++)
       {
         if ((x%subBlockWidth)==0 && x!=0)
-        {
           ss << std::setw(defWidth+2) << "";
-        }
 
         ss << std::setw(defWidth) << blkSrc[y*stride + x] << ' ';
       }
