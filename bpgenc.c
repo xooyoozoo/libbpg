@@ -1754,8 +1754,8 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
     if (nal_unit_type != 34) {
         free(nal_buf);
-        fprintf(stderr, "expecting PPS nal (%d)\n", nal_unit_type);
-        return -1;
+        fprintf(stderr, "expecting PPS nal, got (%d)\n", nal_unit_type);
+        exit(1);
     }
     {
         init_get_bits(gb, nal_buf, nal_len);
@@ -1779,8 +1779,8 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
     if (nal_unit_type != 19 && 20 != nal_unit_type) {
         free(nal_buf);
-        fprintf(stderr, "expecting IDR nal (%d)\n", nal_unit_type);
-        return -1;
+        fprintf(stderr, "expecting IDR nal, got (%d)\n", nal_unit_type);
+        exit(1);
     }
     {
         init_get_bits(gb, nal_buf, nal_len);
@@ -2330,13 +2330,16 @@ struct BPGEncoderContext {
     BPGEncoderParameters params;
     BPGMetaData *first_md;
     HEVCEncoder *encoder;
-    HEVCEncoder *encoder_alpha;
+    HEVCEncoder *alpha_encoder;
     int frame_count;
     HEVCEncoderContext *enc_ctx;
     HEVCEncoderContext *alpha_enc_ctx;
     int frame_ticks;
     uint16_t *frame_duration_tab;
     int frame_duration_tab_size;
+
+    uint8_t *color_buf;
+    uint8_t *alpha_buf;
 };
 
 void *mallocz(size_t size)
@@ -2388,7 +2391,7 @@ BPGEncoderContext *bpg_encoder_open(BPGEncoderParameters *p)
         return NULL;
     s->params = *p;
     s->encoder = hevc_encoder_tab[s->params.encoder_type];
-    s->encoder_alpha = hevc_encoder_tab[0];
+    s->alpha_encoder = hevc_encoder_tab[0];
     s->frame_ticks = 1;
     return s;
 }
@@ -2399,13 +2402,29 @@ void bpg_encoder_set_extension_data(BPGEncoderContext *s,
     s->first_md = md;
 }
 
+static int bpg_encoder_close_plane(HEVCEncoder *e, HEVCEncoderContext *c,
+                                   uint8_t **out_buf)
+{
+    int out_buf_len;
+
+    out_buf_len = e->close(c, out_buf);
+    if (out_buf_len < 0) {
+        fprintf(stderr, "Error during picture encode\n");
+        exit(1);
+    }
+    c = NULL;
+
+    return out_buf_len;
+}
+
 static int bpg_encoder_encode_trailer(BPGEncoderContext *s,
                                       BPGEncoderWriteFunc *write_func,
-                                      void *opaque)
+                                      void *opaque,
+                                      int out_buf_len, int alpha_buf_len)
 {
-    uint8_t *out_buf, *alpha_buf, *hevc_buf;
-    int out_buf_len, alpha_buf_len, hevc_buf_len;
-
+    uint8_t *hevc_buf;
+    int hevc_buf_len;
+/*
     out_buf_len = s->encoder->close(s->enc_ctx, &out_buf);
     if (out_buf_len < 0) {
         fprintf(stderr, "Error while encoding picture\n");
@@ -2416,24 +2435,24 @@ static int bpg_encoder_encode_trailer(BPGEncoderContext *s,
     alpha_buf = NULL;
     alpha_buf_len = 0;
     if (s->alpha_enc_ctx) {
-        alpha_buf_len = s->encoder_alpha->close(s->alpha_enc_ctx, &alpha_buf);
+        alpha_buf_len = s->alpha_encoder->close(s->alpha_enc_ctx, &alpha_buf);
         if (alpha_buf_len < 0) {
             fprintf(stderr, "Error while encoding picture (alpha plane)\n");
             exit(1);
         }
         s->alpha_enc_ctx = NULL;
     }
-
+*/
     hevc_buf = NULL;
-    hevc_buf_len = build_modified_hevc(&hevc_buf, out_buf, out_buf_len,
-                                       alpha_buf, alpha_buf_len,
+    hevc_buf_len = build_modified_hevc(&hevc_buf, s->color_buf, out_buf_len,
+                                       s->alpha_buf, alpha_buf_len,
                                        s->frame_duration_tab, s->frame_count);
     if (hevc_buf_len < 0) {
         fprintf(stderr, "Error while creating HEVC data\n");
         exit(1);
     }
-    free(out_buf);
-    free(alpha_buf);
+    free(s->color_buf);
+    free(s->alpha_buf);
 
     if (write_func(opaque, hevc_buf, hevc_buf_len) != hevc_buf_len) {
         fprintf(stderr, "Error while writing HEVC data\n");
@@ -2465,9 +2484,16 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
     uint8_t *extension_buf;
     int extension_buf_len;
     int cb_size, width, height;
+    int out_buf_len, alpha_buf_len;
 
     if (p->animated && !img) {
-        return bpg_encoder_encode_trailer(s, write_func, opaque);
+        out_buf_len = bpg_encoder_close_plane(s->encoder, s->enc_ctx, &s->color_buf);
+        if (s->alpha_enc_ctx)
+            alpha_buf_len = bpg_encoder_close_plane(s->alpha_encoder, s->alpha_enc_ctx, &s->alpha_buf);
+        else
+            alpha_buf_len = 0;
+
+        return bpg_encoder_encode_trailer(s, write_func, opaque, out_buf_len, alpha_buf_len);
     }
 
     /* extract the alpha plane */
@@ -2569,21 +2595,34 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
             fprintf(stderr, "Error while opening encoder\n");
             exit(1);
         }
+    }
 
+    /* do color planes first */
+    s->encoder->encode(s->enc_ctx, img);
+    if (!p->animated)
+        out_buf_len = bpg_encoder_close_plane(s->encoder, s->enc_ctx, &s->color_buf);
+
+    if (s->frame_count == 0) {
         if (img_alpha) {
-            if (p->alpha_qp < 0)
-                ep->qp = p->qp;
-            else
+            if (p->alpha_qp < 0) {
+                if (!p->animated)
+                    ep->qp = get_pic_base_qp(s->color_buf, out_buf_len);
+                else
+                    ep->qp = p->qp;
+            } else {
                 ep->qp = p->alpha_qp;
+            }
             ep->chroma_format = 0;
 
-            s->alpha_enc_ctx = s->encoder_alpha->open(ep);
+            s->alpha_enc_ctx = s->alpha_encoder->open(ep);
             if (!s->alpha_enc_ctx) {
                 fprintf(stderr, "Error while opening alpha encoder\n");
                 exit(1);
             }
         }
+    }
 
+    if (s->frame_count == 0) {
         /* prepare the extension data */
         if (p->animated) {
             BPGMetaData *md;
@@ -2695,17 +2734,20 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
     }
     s->frame_duration_tab[s->frame_count] = s->frame_ticks;
 
-    s->encoder->encode(s->enc_ctx, img);
-
     if (img_alpha) {
-        s->encoder_alpha->encode(s->alpha_enc_ctx, img_alpha);
+        s->alpha_encoder->encode(s->alpha_enc_ctx, img_alpha);
         image_free(img_alpha);
     }
 
     s->frame_count++;
 
-    if (!p->animated)
-        bpg_encoder_encode_trailer(s, write_func, opaque);
+    if (!p->animated) {
+        if (s->alpha_enc_ctx)
+            alpha_buf_len = bpg_encoder_close_plane(s->alpha_encoder, s->alpha_enc_ctx, &s->alpha_buf);
+        else
+            alpha_buf_len = 0;
+        bpg_encoder_encode_trailer(s, write_func, opaque, out_buf_len, alpha_buf_len);
+    }
 
     return 0;
 }
@@ -3060,6 +3102,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "Could not open BPG encoder\n");
         exit(1);
     }
+
+    enc_ctx->color_buf = NULL;
+    enc_ctx->alpha_buf = NULL;
 
     if (p->animated) {
         int frame_num, first_frame, frame_ticks;
