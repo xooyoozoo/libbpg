@@ -33,7 +33,7 @@
 #include <jpeglib.h>
 
 /* need this to determine whether x265 can output desired bitdepth */
-#if USE_X265==1
+#if USE_X265
 #include "x265.h"
 #endif
 
@@ -2256,10 +2256,10 @@ static int build_modified_hevc(uint8_t **pout_buf,
 }
 
 typedef enum {
-#if USE_JCTVC==1
+#if USE_JCTVC
     HEVC_ENCODER_JCTVC,
 #endif
-#if USE_X265==1
+#if USE_X265
     HEVC_ENCODER_X265,
 #endif
 
@@ -2267,19 +2267,19 @@ typedef enum {
 } HEVCEncoderEnum;
 
 static char *hevc_encoder_name[HEVC_ENCODER_COUNT] = {
-#if USE_JCTVC==1
+#if USE_JCTVC
     "jctvc",
 #endif
-#if USE_X265==1
+#if USE_X265
     "x265",
 #endif
 };
 
 static HEVCEncoder *hevc_encoder_tab[HEVC_ENCODER_COUNT] = {
-#if USE_JCTVC==1
+#if USE_JCTVC
     &jctvc_encoder,
 #endif
-#if USE_X265==1
+#if USE_X265
     &x265_hevc_encoder,
 #endif
 };
