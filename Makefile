@@ -99,7 +99,9 @@ BPGENC_LIBS:=
 ifdef USE_X265
 BPGENC_OBJS+=x265_glue.o
 BPGENC_LIBS+= -lx265
-bpgenc.o: CFLAGS+=-DUSE_X265
+bpgenc.o: CFLAGS+=-DUSE_X265=1
+else
+bpgenc.o: CFLAGS+=-DUSE_X265=0
 endif # USE_X265
 
 ifdef USE_JCTVC
@@ -127,7 +129,9 @@ jctvc/libjctvc.a: $(JCTVC_OBJS)
 
 BPGENC_OBJS+=jctvc_glue.o jctvc/libjctvc.a
 
-bpgenc.o: CFLAGS+=-DUSE_JCTVC
+bpgenc.o: CFLAGS+=-DUSE_JCTVC=1
+else
+bpgenc.o: CFLAGS+=-DUSE_JCTVC=0
 endif # USE_JCTVC
 
 

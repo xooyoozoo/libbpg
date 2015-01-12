@@ -33,7 +33,7 @@
 #include <jpeglib.h>
 
 /* need this to determine whether x265 can output desired bitdepth */
-#if defined(USE_X265)
+#if USE_X265==1
 #include "x265.h"
 #endif
 
@@ -2256,10 +2256,10 @@ static int build_modified_hevc(uint8_t **pout_buf,
 }
 
 typedef enum {
-#if defined(USE_JCTVC)
+#if USE_JCTVC==1
     HEVC_ENCODER_JCTVC,
 #endif
-#if defined(USE_X265)
+#if USE_X265==1
     HEVC_ENCODER_X265,
 #endif
 
@@ -2267,19 +2267,19 @@ typedef enum {
 } HEVCEncoderEnum;
 
 static char *hevc_encoder_name[HEVC_ENCODER_COUNT] = {
-#if defined(USE_JCTVC)
+#if USE_JCTVC==1
     "jctvc",
 #endif
-#if defined(USE_X265)
+#if USE_X265==1
     "x265",
 #endif
 };
 
 static HEVCEncoder *hevc_encoder_tab[HEVC_ENCODER_COUNT] = {
-#if defined(USE_JCTVC)
+#if USE_JCTVC==1
     &jctvc_encoder,
 #endif
-#if defined(USE_X265)
+#if USE_X265==1
     &x265_hevc_encoder,
 #endif
 };
@@ -2296,7 +2296,6 @@ static HEVCEncoder *hevc_encoder_tab[HEVC_ENCODER_COUNT] = {
 #define BIT_DEPTH_MAX 12
 #endif
 #define DEFAULT_COMPRESS_LEVEL 8
-
 
 typedef struct BPGEncoderContext BPGEncoderContext;
 
@@ -2561,7 +2560,7 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
         /* color & alpha must have same WPP flag, but bpgdec dislikes WPP + rice param adapt */
         /* turn off wpp when lossless when that tool is useful (444) or at slowest levels */
         if (p->lossless && (img->format == BPG_FORMAT_444 || p->compress_level >= 9)
-                        && (img_alpha || p->encoder_type == HEVC_ENCODER_JCTVC))
+                        && (img_alpha || (USE_JCTVC && p->encoder_type == 0)))
             ep->wpp = 0;
 
         s->enc_ctx = s->encoder->open(ep);
@@ -3049,7 +3048,7 @@ int main(int argc, char **argv)
         if (USE_X265 && bit_depth == x265_max_bit_depth) {
             if ((p->preferred_chroma_format == BPG_FORMAT_420 && !p->lossless)
                 || p->animated) {
-                p->encoder_type = HEVC_ENCODER_X265;
+                p->encoder_type = HEVC_ENCODER_COUNT - 1;
             }
         }
     }
