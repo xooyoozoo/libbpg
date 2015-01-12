@@ -196,7 +196,7 @@ static int x265_close(HEVCEncoderContext *s, uint8_t **pbuf)
             break;
         for(i = 0; i < nal_count; i++) {
             /* only allow expected NAL types */
-            if (p_nal[i].type == 40 || (p_nal[i].type / NAL_UNIT_PPS) <= 1)
+            if (p_nal[i].type == 40 || (p_nal[i].type / NAL_UNIT_ACCESS_UNIT_DELIMITER) < 1)
                 add_nal(s, p_nal[i].payload, p_nal[i].sizeBytes);
         }
     }

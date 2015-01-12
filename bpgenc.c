@@ -2363,7 +2363,6 @@ BPGEncoderParameters *bpg_encoder_param_alloc(void)
     p->frame_delay_den = 25;
     p->loop_count = 0;
 
-    p->qp = -1;
     p->aq = 1.0;
     p->chroma_offset = 0;
     p->deblock = -2;
