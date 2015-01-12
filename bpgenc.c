@@ -2605,7 +2605,7 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
     if (s->frame_count == 0) {
         if (img_alpha) {
             if (p->alpha_qp < 0) {
-                if (!p->animated)
+                if (!p->animated && !p->lossless)
                     ep->qp = get_pic_base_qp(s->color_buf, out_buf_len);
                 else
                     ep->qp = p->qp;
@@ -3043,6 +3043,11 @@ int main(int argc, char **argv)
             if (bit_depth < 8 || bit_depth > BIT_DEPTH_MAX) {
                 fprintf(stderr, "Invalid bit depth (range: 8 to %d)\n",
                         BIT_DEPTH_MAX);
+                exit(1);
+            }
+            if (bit_depth != 8 && p->lossless) {
+                fprintf(stderr, "Non-8bit lossless encodes of 8bit input is wasteful. ");
+                fprintf(stderr, "16bit PNGs, the only other option, won\'t be processed losslessly.\n");
                 exit(1);
             }
             break;
