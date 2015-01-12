@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <math.h>
 #include <unistd.h>
 
 #include "bpgenc.h"
@@ -54,7 +55,7 @@ static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
         return NULL;
     }
     if (params->chroma_format == BPG_FORMAT_GRAY) {
-        fprintf(stderr, "x265 does not support monochrome (or alpha) data yet. Plase use the jctvc encoder.\n");
+        fprintf(stderr, "x265 does not support monochrome (or alpha) data yet. Please use the jctvc encoder.\n");
         return NULL;
     }
 
@@ -72,6 +73,23 @@ static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
     p->decodedPictureHashSEI = params->sei_decoded_picture_hash;
     p->sourceWidth = params->width;
     p->sourceHeight = params->height;
+
+    /* allow with tiny images and CTU size through log2(min_dimension) */
+    switch ( (int)(log(params->width < params->height ? params->width : params->height)/log(2)) ) {
+    case 4:
+        p->maxCUSize = 16;
+        p->tuQTMaxIntraDepth = 3;
+        p->tuQTMaxInterDepth = 3;
+        break;
+    case 5:
+        p->maxCUSize = 32;
+        p->tuQTMaxIntraDepth = 4;
+        p->tuQTMaxInterDepth = 4;
+        break;
+    default:
+        break;
+    }
+
     switch(params->chroma_format) {
     case BPG_FORMAT_GRAY:
         p->internalCsp = X265_CSP_I400;

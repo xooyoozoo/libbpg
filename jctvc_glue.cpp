@@ -3,6 +3,7 @@
 #endif
 #include <unistd.h>
 #include <iostream>
+#include <math.h>
 #include "TAppEncTop.h"
 #include "TLibCommon/Debug.h"
 #include "TLibEncoder/TEncAnalyze.h"
@@ -229,6 +230,24 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
     } else {
         /* current bpgdec problem with transform_skip_rotation and bypass */
         add_opt(&argc, argv, "--ResidualRotation");
+    }
+
+    /* get JCTVC to behave similarly to x265 with tiny images */
+    switch ( (int)log2(std::min(s->params.width, s->params.height)) ) {
+    case 4:
+        add_opt(&argc, argv, "--MaxCUSize=16");
+        add_opt(&argc, argv, "--MaxPartitionDepth=2");
+        add_opt(&argc, argv, "--QuadtreeTUMaxDepthIntra=3");
+        add_opt(&argc, argv, "--QuadtreeTUMaxDepthInter=3");
+        break;
+    case 5:
+        add_opt(&argc, argv, "--MaxCUSize=32");
+        add_opt(&argc, argv, "--MaxPartitionDepth=3");
+        add_opt(&argc, argv, "--QuadtreeTUMaxDepthIntra=4");
+        add_opt(&argc, argv, "--QuadtreeTUMaxDepthInter=4");
+        break;
+    default:
+        break;
     }
 
 #if 0
