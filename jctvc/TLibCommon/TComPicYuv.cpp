@@ -117,8 +117,12 @@ Void TComPicYuv::create( const Int  iPicWidth,    const  Int iPicHeight,    cons
     m_ctuOffsetInBuffer[chan] = new Int[numCuInWidth * numCuInHeight];
 
     for (Int cuRow = 0; cuRow < numCuInHeight; cuRow++)
+    {
       for (Int cuCol = 0; cuCol < numCuInWidth; cuCol++)
+      {
         m_ctuOffsetInBuffer[chan][cuRow * numCuInWidth + cuCol] = stride * cuRow * ctuHeight + cuCol * ctuWidth;
+      }
+    }
 
     m_subCuOffsetInBuffer[chan] = new Int[(size_t)1 << (2 * uiMaxCUDepth)];
 
@@ -127,8 +131,12 @@ Void TComPicYuv::create( const Int  iPicWidth,    const  Int iPicHeight,    cons
     const Int minSubBlockWidth     =(ctuWidth  >> uiMaxCUDepth);
 
     for (Int buRow = 0; buRow < numSubBlockPartitions; buRow++)
+    {
       for (Int buCol = 0; buCol < numSubBlockPartitions; buCol++)
+      {
         m_subCuOffsetInBuffer[chan][(buRow << uiMaxCUDepth) + buCol] = stride  * buRow * minSubBlockHeight + buCol * minSubBlockWidth;
+      }
+    }
   }
   return;
 }
@@ -141,13 +149,25 @@ Void TComPicYuv::destroy()
   {
     m_piPicOrg[chan] = NULL;
 
-    if( m_apiPicBuf[chan] ){ xFree( m_apiPicBuf[chan] );    m_apiPicBuf[chan] = NULL; }
+    if( m_apiPicBuf[chan] )
+    {
+      xFree( m_apiPicBuf[chan] );
+      m_apiPicBuf[chan] = NULL;
+    }
   }
 
   for(UInt chan=0; chan<MAX_NUM_CHANNEL_TYPE; chan++)
   {
-    if (m_ctuOffsetInBuffer[chan]) delete[] m_ctuOffsetInBuffer[chan]; m_ctuOffsetInBuffer[chan] = NULL;
-    if (m_subCuOffsetInBuffer[chan]) delete[] m_subCuOffsetInBuffer[chan]; m_subCuOffsetInBuffer[chan] = NULL;
+    if (m_ctuOffsetInBuffer[chan])
+    {
+      delete[] m_ctuOffsetInBuffer[chan];
+      m_ctuOffsetInBuffer[chan] = NULL;
+    }
+    if (m_subCuOffsetInBuffer[chan])
+    {
+      delete[] m_subCuOffsetInBuffer[chan];
+      m_subCuOffsetInBuffer[chan] = NULL;
+    }
   }
 }
 
@@ -170,7 +190,10 @@ Void  TComPicYuv::copyToPic (TComPicYuv*  pcPicYuvDst) const
 
 Void TComPicYuv::extendPicBorder ()
 {
-  if ( m_bIsBorderExtended ) return;
+  if ( m_bIsBorderExtended )
+  {
+    return;
+  }
 
   for(Int chan=0; chan<getNumberValidComponents(); chan++)
   {

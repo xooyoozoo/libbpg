@@ -171,8 +171,10 @@ public:
                                                 UInt width=getWidth(id);
                                                 Int blkX = ( iTransUnitIdx * iBlkSizeForComponent ) &  ( width - 1 );
                                                 Int blkY = ( iTransUnitIdx * iBlkSizeForComponent ) &~ ( width - 1 );
-                                                if (m_chromaFormatIDC==CHROMA_422 && id!=COMPONENT_Y) blkY<<=1;
-//                                                assert((blkX<getWidth(id) && blkY<getHeight(id)));
+                                                if (m_chromaFormatIDC==CHROMA_422 && id!=COMPONENT_Y)
+                                                {
+                                                  blkY<<=1;
+                                                }
                                                 return m_apiBuf[id] + blkX + blkY * iBlkSizeForComponent;
                                               }
 
@@ -181,9 +183,10 @@ public:
                                                 UInt width=getWidth(id);
                                                 Int blkX = ( iTransUnitIdx * iBlkSizeForComponent ) &  ( width - 1 );
                                                 Int blkY = ( iTransUnitIdx * iBlkSizeForComponent ) &~ ( width - 1 );
-                                                if (m_chromaFormatIDC==CHROMA_422 && id!=COMPONENT_Y) blkY<<=1;
-//                                                UInt w=getWidth(id), h=getHeight(id);
-//                                                assert((blkX<w && blkY<h));
+                                                if (m_chromaFormatIDC==CHROMA_422 && id!=COMPONENT_Y)
+                                                {
+                                                  blkY<<=1;
+                                                }
                                                 return m_apiBuf[id] + blkX + blkY * iBlkSizeForComponent;
                                               }
 

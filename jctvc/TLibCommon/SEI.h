@@ -398,7 +398,7 @@ public:
   Int    m_cameraIsoSpeedValue;
   Int    m_exposureIndexIdc;
   Int    m_exposureIndexValue;
-  Int    m_exposureCompensationValueSignFlag;
+  Bool   m_exposureCompensationValueSignFlag;
   Int    m_exposureCompensationValueNumerator;
   Int    m_exposureCompensationValueDenomIdc;
   Int    m_refScreenLuminanceWhite;

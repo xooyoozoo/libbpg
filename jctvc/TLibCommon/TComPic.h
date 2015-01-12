@@ -64,7 +64,7 @@ private:
   UInt                  m_uiTLayer;               //  Temporal layer
   Bool                  m_bUsedByCurr;            //  Used by current picture
   Bool                  m_bIsLongTerm;            //  IS long term picture
-  TComPicSym*           m_apcPicSym;              //  Symbol
+  TComPicSym            m_picSym;                 //  Symbol
   TComPicYuv*           m_apcPicYuv[NUM_PIC_YUV];
 
   TComPicYuv*           m_pcPicYuvPred;           //  Prediction
@@ -73,10 +73,6 @@ private:
   Bool                  m_bNeededForOutput;
   UInt                  m_uiCurrSliceIdx;         // Index of current slice
   Bool                  m_bCheckLTMSB;
-
-  Int                   m_numReorderPics[MAX_TLAYER];
-  Window                m_conformanceWindow;
-  Window                m_defaultDisplayWindow;
 
   Bool                  m_isTop;
   Bool                  m_isField;
@@ -89,8 +85,7 @@ public:
   TComPic();
   virtual ~TComPic();
 
-  Void          create( Int iWidth, Int iHeight, ChromaFormat chromaFormatIDC, UInt uiMaxWidth, UInt uiMaxHeight, UInt uiMaxDepth, Window &conformanceWindow, Window &defaultDisplayWindow,
-                        Int *numReorderPics,Bool bIsVirtual /*= false*/ );
+  Void          create( const TComSPS &sps, const TComPPS &pps, const UInt uiMaxWidth, const UInt uiMaxHeight, const UInt uiMaxDepth, const Bool bIsVirtual /*= false*/ );
 
   virtual Void  destroy();
 
@@ -104,11 +99,11 @@ public:
   Void          setCheckLTMSBPresent     (Bool b ) {m_bCheckLTMSB=b;}
   Bool          getCheckLTMSBPresent     () { return m_bCheckLTMSB;}
 
-  TComPicSym*   getPicSym()           { return  m_apcPicSym;    }
-  TComSlice*    getSlice(Int i)       { return  m_apcPicSym->getSlice(i);  }
-  Int           getPOC() const        { return  m_apcPicSym->getSlice(m_uiCurrSliceIdx)->getPOC();  }
-  TComDataCU*   getCtu( UInt ctuRsAddr )           { return  m_apcPicSym->getCtu( ctuRsAddr ); }
-  const TComDataCU* getCtu( UInt ctuRsAddr ) const { return  m_apcPicSym->getCtu( ctuRsAddr ); }
+  TComPicSym*   getPicSym()           { return  &m_picSym;    }
+  TComSlice*    getSlice(Int i)       { return  m_picSym.getSlice(i);  }
+  Int           getPOC() const        { return  m_picSym.getSlice(m_uiCurrSliceIdx)->getPOC();  }
+  TComDataCU*   getCtu( UInt ctuRsAddr )           { return  m_picSym.getCtu( ctuRsAddr ); }
+  const TComDataCU* getCtu( UInt ctuRsAddr ) const { return  m_picSym.getCtu( ctuRsAddr ); }
 
   TComPicYuv*   getPicYuvOrg()        { return  m_apcPicYuv[PIC_YUV_ORG]; }
   TComPicYuv*   getPicYuvRec()        { return  m_apcPicYuv[PIC_YUV_REC]; }
@@ -118,14 +113,14 @@ public:
   Void          setPicYuvPred( TComPicYuv* pcPicYuv )       { m_pcPicYuvPred = pcPicYuv; }
   Void          setPicYuvResi( TComPicYuv* pcPicYuv )       { m_pcPicYuvResi = pcPicYuv; }
 
-  UInt          getNumberOfCtusInFrame() const     { return m_apcPicSym->getNumberOfCtusInFrame(); }
-  UInt          getNumPartInCtuWidth() const       { return m_apcPicSym->getNumPartInCtuWidth();   }
-  UInt          getNumPartInCtuHeight() const      { return m_apcPicSym->getNumPartInCtuHeight();  }
-  UInt          getNumPartitionsInCtu() const      { return m_apcPicSym->getNumPartitionsInCtu();  }
-  UInt          getFrameWidthInCtus() const        { return m_apcPicSym->getFrameWidthInCtus();    }
-  UInt          getFrameHeightInCtus() const       { return m_apcPicSym->getFrameHeightInCtus();   }
-  UInt          getMinCUWidth() const              { return m_apcPicSym->getMinCUWidth();          }
-  UInt          getMinCUHeight() const             { return m_apcPicSym->getMinCUHeight();         }
+  UInt          getNumberOfCtusInFrame() const     { return m_picSym.getNumberOfCtusInFrame(); }
+  UInt          getNumPartInCtuWidth() const       { return m_picSym.getNumPartInCtuWidth();   }
+  UInt          getNumPartInCtuHeight() const      { return m_picSym.getNumPartInCtuHeight();  }
+  UInt          getNumPartitionsInCtu() const      { return m_picSym.getNumPartitionsInCtu();  }
+  UInt          getFrameWidthInCtus() const        { return m_picSym.getFrameWidthInCtus();    }
+  UInt          getFrameHeightInCtus() const       { return m_picSym.getFrameHeightInCtus();   }
+  UInt          getMinCUWidth() const              { return m_picSym.getMinCUWidth();          }
+  UInt          getMinCUHeight() const             { return m_picSym.getMinCUHeight();         }
 
   Int           getStride(const ComponentID id) const          { return m_apcPicYuv[PIC_YUV_REC]->getStride(id); }
   Int           getComponentScaleX(const ComponentID id) const    { return m_apcPicYuv[PIC_YUV_REC]->getComponentScaleX(id); }
@@ -138,18 +133,15 @@ public:
   Void          setOutputMark (Bool b) { m_bNeededForOutput = b;     }
   Bool          getOutputMark () const      { return m_bNeededForOutput;  }
 
-  Void          setNumReorderPics(Int i, UInt tlayer) { m_numReorderPics[tlayer] = i;    }
-  Int           getNumReorderPics(UInt tlayer)        { return m_numReorderPics[tlayer]; }
-
   Void          compressMotion();
   UInt          getCurrSliceIdx() const           { return m_uiCurrSliceIdx;                }
   Void          setCurrSliceIdx(UInt i)      { m_uiCurrSliceIdx = i;                   }
-  UInt          getNumAllocatedSlice() const      {return m_apcPicSym->getNumAllocatedSlice();}
-  Void          allocateNewSlice()           {m_apcPicSym->allocateNewSlice();         }
-  Void          clearSliceBuffer()           {m_apcPicSym->clearSliceBuffer();         }
+  UInt          getNumAllocatedSlice() const      {return m_picSym.getNumAllocatedSlice();}
+  Void          allocateNewSlice()           {m_picSym.allocateNewSlice();         }
+  Void          clearSliceBuffer()           {m_picSym.clearSliceBuffer();         }
 
-  Window&       getConformanceWindow()  { return m_conformanceWindow; }
-  Window&       getDefDisplayWindow()   { return m_defaultDisplayWindow; }
+  const Window& getConformanceWindow() const { return m_picSym.getSPS().getConformanceWindow(); }
+  Window        getDefDisplayWindow() const  { return m_picSym.getSPS().getVuiParametersPresentFlag() ? m_picSym.getSPS().getVuiParameters()->getDefaultDisplayWindow() : Window(); }
 
   Bool          getSAOMergeAvailability(Int currAddr, Int mergeAddr);
 

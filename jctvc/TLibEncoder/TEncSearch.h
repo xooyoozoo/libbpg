@@ -115,7 +115,6 @@ protected:
   // Misc.
   Pel*            m_pTempPel;
   const UInt*     m_puiDFilter;
-  Int             m_iMaxDeltaQP;
 
   // AMVP cost computation
   // UInt            m_auiMVPIdxCost[AMVP_MAX_NUM_CANDS+1][AMVP_MAX_NUM_CANDS];
@@ -132,7 +131,6 @@ public:
             Int           iSearchRange,
             Int           bipredSearchRange,
             Int           iFastSearch,
-            Int           iMaxDeltaQP,
             TEncEntropy*  pcEntropyCoder,
             TComRdCost*   pcRdCost,
             TEncSbac***   pppcRDSbacCoder,
@@ -167,18 +165,12 @@ protected:
   Void xGetInterPredictionError( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPartIdx, Distortion& ruiSAD, Bool Hadamard );
 
 public:
-  Void  preestChromaPredMode    ( TComDataCU* pcCU,
-                                  TComYuv*    pcOrgYuv,
-                                  TComYuv*    pcPredYuv );
-
-  Void  estIntraPredQT          ( TComDataCU* pcCU,
+  Void  estIntraPredLumaQT      ( TComDataCU* pcCU,
                                   TComYuv*    pcOrgYuv,
                                   TComYuv*    pcPredYuv,
                                   TComYuv*    pcResiYuv,
                                   TComYuv*    pcRecoYuv,
-                                  Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
-                                  Distortion& ruiDistC,
-                                  Bool        bLumaOnly
+                                  Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE]
                                   DEBUG_STRING_FN_DECLARE(sDebug));
 
   Void  estIntraPredChromaQT    ( TComDataCU* pcCU,
@@ -186,8 +178,7 @@ public:
                                   TComYuv*    pcPredYuv,
                                   TComYuv*    pcResiYuv,
                                   TComYuv*    pcRecoYuv,
-                                  Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
-                                  Distortion  uiPreCalcDistC
+                                  Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE]
                                   DEBUG_STRING_FN_DECLARE(sDebug));
 
   /// encoder estimation - inter prediction (non-skip)
@@ -210,7 +201,7 @@ public:
                                   TComYuv*    pcYuvResi,
                                   TComYuv*    pcYuvResiBest,
                                   TComYuv*    pcYuvRec,
-                                  Bool        bSkipRes
+                                  Bool        bSkipResidual
                                   DEBUG_STRING_FN_DECLARE(sDebug) );
 
   /// set ME search range
@@ -257,22 +248,19 @@ protected:
                                          ,Int           default0Save1Load2 = 0
                                    );
 
-  Void  xRecurIntraCodingQT       ( Bool        bLumaOnly,
-                                    TComYuv*    pcOrgYuv,
+  Void  xRecurIntraCodingLumaQT   ( TComYuv*    pcOrgYuv,
                                     TComYuv*    pcPredYuv,
                                     TComYuv*    pcResiYuv,
                                     Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
                                     Distortion& ruiDistY,
-                                    Distortion& ruiDistC,
 #if HHI_RQT_INTRA_SPEEDUP
-                                   Bool         bCheckFirst,
+                                    Bool         bCheckFirst,
 #endif
-                                   Double&      dRDCost,
-                                   TComTU      &rTu
-                                   DEBUG_STRING_FN_DECLARE(sDebug));
+                                    Double&      dRDCost,
+                                    TComTU      &rTu
+                                    DEBUG_STRING_FN_DECLARE(sDebug));
 
-  Void  xSetIntraResultQT         ( Bool         bLumaOnly,
-                                    TComYuv*     pcRecoYuv,
+  Void  xSetIntraResultLumaQT     ( TComYuv*     pcRecoYuv,
                                     TComTU &rTu);
 
   Void xStoreCrossComponentPredictionResult  (       Pel    *pResiLuma,
@@ -302,8 +290,8 @@ protected:
 
   Void  xSetIntraResultChromaQT   ( TComYuv*    pcRecoYuv, TComTU &rTu);
 
-  Void  xStoreIntraResultQT       ( const ComponentID first, const ComponentID lastIncl, TComTU &rTu);
-  Void  xLoadIntraResultQT        ( const ComponentID first, const ComponentID lastIncl, TComTU &rTu);
+  Void  xStoreIntraResultQT       ( const ComponentID compID, TComTU &rTu);
+  Void  xLoadIntraResultQT        ( const ComponentID compID, TComTU &rTu);
 
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -448,9 +436,9 @@ protected:
   // -------------------------------------------------------------------------------------------------------------------
 
 
-  Void xEncodeResidualQT( const ComponentID compID, TComTU &rTu );
-  Void xEstimateResidualQT( TComYuv* pcResi, Double &rdCost, UInt &ruiBits, Distortion &ruiDist, Distortion *puiZeroDist, TComTU &rTu DEBUG_STRING_FN_DECLARE(sDebug) );
-  Void xSetResidualQTData( TComYuv* pcResi, Bool bSpatial, TComTU &rTu  );
+  Void xEncodeInterResidualQT( const ComponentID compID, TComTU &rTu );
+  Void xEstimateInterResidualQT( TComYuv* pcResi, Double &rdCost, UInt &ruiBits, Distortion &ruiDist, Distortion *puiZeroDist, TComTU &rTu DEBUG_STRING_FN_DECLARE(sDebug) );
+  Void xSetInterResidualQTData( TComYuv* pcResi, Bool bSpatial, TComTU &rTu  );
 
   UInt  xModeBitsIntra ( TComDataCU* pcCU, UInt uiMode, UInt uiPartOffset, UInt uiDepth, UInt uiInitTrDepth, const ChannelType compID );
   UInt  xUpdateCandList( UInt uiMode, Double uiCost, UInt uiFastCandNum, UInt * CandModeList, Double * CandCostList );

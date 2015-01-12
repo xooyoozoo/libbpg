@@ -298,7 +298,9 @@ namespace df
         * where longopts have to include an =, otherwise they are
         * booleans */
         if (argc == 1)
+        {
           return 0; /* run out of argv for argument */
+        }
         extra_argc_consumed = 1;
 #endif
         if(!storePair(opts, true, false, option, "1"))
@@ -375,7 +377,9 @@ namespace df
         {
           /* a lone double dash ends option processing */
           while (++i < argc)
+          {
             non_option_arguments.push_back(argv[i]);
+          }
           break;
         }
 
@@ -440,8 +444,7 @@ namespace df
         /* consume any white space, incase there is another word.
          * any trailing whitespace will be removed shortly */
         value_end = line.find_first_not_of(" \t\n\r", value_end);
-      }
-      while (value_end != string::npos);
+      } while (value_end != string::npos);
       /* strip any trailing space from value*/
       value_end = line.find_last_not_of(" \t\n\r", value_end);
 
@@ -467,8 +470,7 @@ namespace df
         string line;
         getline(in, line);
         scanLine(opts, line);
-      }
-      while(!!in);
+      } while(!!in);
     }
 
     /* for all options in opts, set their storage to their specified

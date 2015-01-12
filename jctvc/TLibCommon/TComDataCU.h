@@ -197,7 +197,6 @@ public:
   Void          copyPartFrom          ( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth );
 
   Void          copyToPic             ( UChar uiDepth );
-  Void          copyToPic             ( UChar uiDepth, UInt uiPartIdx, UInt uiPartDepth );
 
   // -------------------------------------------------------------------------------------------------------------------
   // member functions for CU description
@@ -359,7 +358,7 @@ public:
   // member functions for accessing partition information
   // -------------------------------------------------------------------------------------------------------------------
 
-  Void          getPartIndexAndSize   ( UInt uiPartIdx, UInt& ruiPartAddr, Int& riWidth, Int& riHeight );
+  Void          getPartIndexAndSize   ( UInt uiPartIdx, UInt& ruiPartAddr, Int& riWidth, Int& riHeight ); // This is for use by a leaf/sub CU object only, with no additional AbsPartIdx
   UChar         getNumPartitions      ( const UInt uiAbsPartIdx = 0 );
   Bool          isFirstAbsZorderIdxInDepth (UInt uiAbsPartIdx, UInt uiDepth);
 
@@ -455,7 +454,7 @@ public:
   UInt          getIntraSizeIdx                 ( UInt uiAbsPartIdx                                       );
 
   Void          getAllowedChromaDir             ( UInt uiAbsPartIdx, UInt* uiModeList );
-  Int           getIntraDirPredictor            ( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM_MOST_PROBABLE_MODES], const ComponentID compID, Int* piMode = NULL );
+  Void          getIntraDirPredictor            ( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM_MOST_PROBABLE_MODES], const ComponentID compID, Int* piMode = NULL );
 
   // -------------------------------------------------------------------------------------------------------------------
   // member functions for SBAC context

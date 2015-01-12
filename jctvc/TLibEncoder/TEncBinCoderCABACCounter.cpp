@@ -83,14 +83,19 @@ Void TEncBinCABACCounter::encodeBin( UInt binValue, ContextModel &rcCtxModel )
 
 #ifdef DEBUG_ENCODER_SEARCH_BINS
   if ((g_debugCounter + debugEncoderSearchBinWindow) >= debugEncoderSearchBinTargetLine)
+  {
     std::cout << g_debugCounter << ": coding bin value " << binValue << ", fracBits = [" << startingFracBits << "->" << m_fracBits << "]\n";
+  }
 
   if (g_debugCounter >= debugEncoderSearchBinTargetLine)
   {
     Char breakPointThis;
     breakPointThis = 7;
   }
-  if (g_debugCounter >= (debugEncoderSearchBinTargetLine + debugEncoderSearchBinWindow)) exit(0);
+  if (g_debugCounter >= (debugEncoderSearchBinTargetLine + debugEncoderSearchBinWindow))
+  {
+    exit(0);
+  }
   g_debugCounter++;
 #endif
 }

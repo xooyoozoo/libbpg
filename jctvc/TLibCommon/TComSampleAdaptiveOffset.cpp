@@ -116,8 +116,16 @@ TComSampleAdaptiveOffset::~TComSampleAdaptiveOffset()
 {
   destroy();
 
-  if (m_signLineBuf1) delete[] m_signLineBuf1; m_signLineBuf1 = NULL;
-  if (m_signLineBuf2) delete[] m_signLineBuf2; m_signLineBuf2 = NULL;
+  if (m_signLineBuf1)
+  {
+    delete[] m_signLineBuf1;
+    m_signLineBuf1 = NULL;
+  }
+  if (m_signLineBuf2)
+  {
+    delete[] m_signLineBuf2;
+    m_signLineBuf2 = NULL;
+  }
 }
 
 Void TComSampleAdaptiveOffset::create( Int picWidth, Int picHeight, ChromaFormat format, UInt maxCUWidth, UInt maxCUHeight, UInt maxCUDepth, UInt lumaBitShift, UInt chromaBitShift )
@@ -314,10 +322,18 @@ Void TComSampleAdaptiveOffset::offsetBlock(ComponentID compIdx, Int typeIdx, Int
   {
     m_lineBufWidth = m_maxCUWidth;
 
-    if (m_signLineBuf1) delete[] m_signLineBuf1; m_signLineBuf1 = NULL;
+    if (m_signLineBuf1)
+    {
+      delete[] m_signLineBuf1;
+      m_signLineBuf1 = NULL;
+    }
     m_signLineBuf1 = new Char[m_lineBufWidth+1];
 
-    if (m_signLineBuf2) delete[] m_signLineBuf2; m_signLineBuf2 = NULL;
+    if (m_signLineBuf2)
+    {
+      delete[] m_signLineBuf2;
+      m_signLineBuf2 = NULL;
+    }
     m_signLineBuf2 = new Char[m_lineBufWidth+1];
   }
 
@@ -547,9 +563,15 @@ Void TComSampleAdaptiveOffset::offsetCTU(Int ctuRsAddr, TComPicYuv* srcYuv, TCom
   Bool bAllOff=true;
   for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
   {
-    if (saoblkParam[compIdx].modeIdc != SAO_MODE_OFF) bAllOff=false;
+    if (saoblkParam[compIdx].modeIdc != SAO_MODE_OFF)
+    {
+      bAllOff=false;
+    }
   }
-  if (bAllOff) return;
+  if (bAllOff)
+  {
+    return;
+  }
 
   //block boundary availability
   pPic->getPicSym()->deriveLoopFilterBoundaryAvailibility(ctuRsAddr, isLeftAvail,isRightAvail,isAboveAvail,isBelowAvail,isAboveLeftAvail,isAboveRightAvail,isBelowLeftAvail,isBelowRightAvail);
@@ -599,9 +621,15 @@ Void TComSampleAdaptiveOffset::SAOProcess(TComPic* pDecPic)
   Bool bAllDisabled=true;
   for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
   {
-    if (m_picSAOEnabled[compIdx]) bAllDisabled=false;
+    if (m_picSAOEnabled[compIdx])
+    {
+      bAllDisabled=false;
+    }
   }
-  if (bAllDisabled) return;
+  if (bAllDisabled)
+  {
+    return;
+  }
 
   TComPicYuv* resYuv = pDecPic->getPicYuvRec();
   TComPicYuv* srcYuv = m_tempPicYuv;
@@ -663,7 +691,9 @@ Void TComSampleAdaptiveOffset::xPCMCURestoration ( TComDataCU* pcCU, UInt uiAbsZ
       UInt uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsZorderIdx] ];
       UInt uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsZorderIdx] ];
       if( ( uiLPelX < pcCU->getSlice()->getSPS()->getPicWidthInLumaSamples() ) && ( uiTPelY < pcCU->getSlice()->getSPS()->getPicHeightInLumaSamples() ) )
+      {
         xPCMCURestoration( pcCU, uiAbsZorderIdx, uiDepth+1 );
+      }
     }
     return;
   }

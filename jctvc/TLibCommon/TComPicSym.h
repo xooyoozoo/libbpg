@@ -40,6 +40,7 @@
 
 
 // Include files
+#include <deque>
 #include "CommonDef.h"
 #include "TComSlice.h"
 #include "TComDataCU.h"
@@ -96,8 +97,7 @@ private:
   UInt          m_numPartInCtuHeight;
   UInt          m_numCtusInFrame;
 
-  TComSlice**   m_apcTComSlice;
-  UInt          m_uiNumAllocatedSlice;
+  std::deque<TComSlice*> m_apSlices;
   TComDataCU**  m_pictureCtuArray;        ///< array of CU data.
 
   Int           m_numTileColumnsMinus1;
@@ -107,15 +107,24 @@ private:
   UInt*         m_puiTileIdxMap;       ///< the map of the tile index relative to CTU raster scan address
   UInt*         m_ctuRsToTsAddrMap;    ///< for a given RS (Raster-Scan) address, returns the TS (Tile-Scan; coding order) address. cf CtbAddrRsToTs in specification.
 
-  SAOBlkParam *m_saoBlkParams;
+  SAOBlkParam  *m_saoBlkParams;
+  TComSPS       m_sps;
+  TComPPS       m_pps;
+
+  Void               xInitTiles( );
+  Void               xInitCtuTsRsAddrMaps();
+  Void               setNumTileColumnsMinus1( Int i )                      { m_numTileColumnsMinus1 = i;    }
+  Void               setNumTileRowsMinus1( Int i )                         { m_numTileRowsMinus1 = i;       }
+  Void               setCtuTsToRsAddrMap( Int ctuTsAddr, Int ctuRsAddr )   { *(m_ctuTsToRsAddrMap + ctuTsAddr) = ctuRsAddr; }
+  Void               setCtuRsToTsAddrMap( Int ctuRsAddr, Int ctuTsOrder )  { *(m_ctuRsToTsAddrMap + ctuRsAddr) = ctuTsOrder; }
 
 public:
-  Void               create  ( ChromaFormat chromaFormatIDC, Int iPicWidth, Int iPicHeight, UInt uiMaxWidth, UInt uiMaxHeight, UInt uiMaxDepth );
+  Void               create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxWidth, UInt uiMaxHeight, UInt uiMaxDepth );
   Void               destroy ();
 
   TComPicSym  ();
-  TComSlice*         getSlice(UInt i)                                      { return m_apcTComSlice[i];             }
-  const TComSlice*   getSlice(UInt i) const                                { return m_apcTComSlice[i];             }
+  TComSlice*         getSlice(UInt i)                                      { return m_apSlices[i];             }
+  const TComSlice*   getSlice(UInt i) const                                { return m_apSlices[i];             }
   UInt               getFrameWidthInCtus() const                           { return m_frameWidthInCtus;            }
   UInt               getFrameHeightInCtus() const                          { return m_frameHeightInCtus;           }
   UInt               getMinCUWidth() const                                 { return m_uiMinCUWidth;                }
@@ -123,29 +132,24 @@ public:
   UInt               getNumberOfCtusInFrame() const                        { return m_numCtusInFrame;              }
   TComDataCU*        getCtu( UInt ctuRsAddr )                              { return m_pictureCtuArray[ctuRsAddr];  }
   const TComDataCU*  getCtu( UInt ctuRsAddr ) const                        { return m_pictureCtuArray[ctuRsAddr];  }
+  const TComSPS&     getSPS()                 const                        { return m_sps; }
+  const TComPPS&     getPPS()                 const                        { return m_pps; }
 
-  Void               setSlice(TComSlice* p, UInt i)                        { m_apcTComSlice[i] = p;           }
-  UInt               getNumAllocatedSlice() const                          { return m_uiNumAllocatedSlice;         }
+  TComSlice *        swapSliceObject(TComSlice* p, UInt i)                 { p->setSPS(&m_sps); p->setPPS(&m_pps); TComSlice *pTmp=m_apSlices[i];m_apSlices[i] = p; pTmp->setSPS(0); pTmp->setPPS(0); return pTmp; }
+  UInt               getNumAllocatedSlice() const                          { return UInt(m_apSlices.size());       }
   Void               allocateNewSlice();
   Void               clearSliceBuffer();
   UInt               getNumPartitionsInCtu() const                         { return m_numPartitionsInCtu;   }
   UInt               getNumPartInCtuWidth() const                          { return m_numPartInCtuWidth;    }
   UInt               getNumPartInCtuHeight() const                         { return m_numPartInCtuHeight;   }
-  Void               setNumTileColumnsMinus1( Int i )                      { m_numTileColumnsMinus1 = i;    }
   Int                getNumTileColumnsMinus1() const                       { return m_numTileColumnsMinus1; }
-  Void               setNumTileRowsMinus1( Int i )                         { m_numTileRowsMinus1 = i;       }
   Int                getNumTileRowsMinus1() const                          { return m_numTileRowsMinus1;    }
   Int                getNumTiles() const                                   { return (m_numTileRowsMinus1+1)*(m_numTileColumnsMinus1+1); }
   TComTile*          getTComTile  ( UInt tileIdx )                         { return &(m_tileParameters[tileIdx]); }
   const TComTile*    getTComTile  ( UInt tileIdx ) const                   { return &(m_tileParameters[tileIdx]); }
-  Void               setCtuTsToRsAddrMap( Int ctuTsAddr, Int ctuRsAddr )   { *(m_ctuTsToRsAddrMap + ctuTsAddr) = ctuRsAddr; }
   UInt               getCtuTsToRsAddrMap( Int ctuTsAddr ) const            { return *(m_ctuTsToRsAddrMap + (ctuTsAddr>=m_numCtusInFrame ? m_numCtusInFrame : ctuTsAddr)); }
   UInt               getTileIdxMap( Int ctuRsAddr ) const                  { return *(m_puiTileIdxMap + ctuRsAddr); }
-  Void               setCtuRsToTsAddrMap( Int ctuRsAddr, Int ctuTsOrder )  { *(m_ctuRsToTsAddrMap + ctuRsAddr) = ctuTsOrder; }
   UInt               getCtuRsToTsAddrMap( Int ctuRsAddr ) const            { return *(m_ctuRsToTsAddrMap + (ctuRsAddr>=m_numCtusInFrame ? m_numCtusInFrame : ctuRsAddr)); }
-  Void               initTiles(TComPPS *pps);
-
-  Void               initCtuTsRsAddrMaps();
   SAOBlkParam*       getSAOBlkParam()                                      { return m_saoBlkParams;}
   const SAOBlkParam* getSAOBlkParam() const                                { return m_saoBlkParams;}
   Void               deriveLoopFilterBoundaryAvailibility(Int ctuRsAddr,
