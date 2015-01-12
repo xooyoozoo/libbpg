@@ -2330,6 +2330,7 @@ struct BPGEncoderContext {
     BPGEncoderParameters params;
     BPGMetaData *first_md;
     HEVCEncoder *encoder;
+    HEVCEncoder *encoder_alpha;
     int frame_count;
     HEVCEncoderContext *enc_ctx;
     HEVCEncoderContext *alpha_enc_ctx;
@@ -2388,6 +2389,7 @@ BPGEncoderContext *bpg_encoder_open(BPGEncoderParameters *p)
         return NULL;
     s->params = *p;
     s->encoder = hevc_encoder_tab[s->params.encoder_type];
+    s->encoder_alpha = hevc_encoder_tab[0];
     s->frame_ticks = 1;
     return s;
 }
@@ -2415,7 +2417,7 @@ static int bpg_encoder_encode_trailer(BPGEncoderContext *s,
     alpha_buf = NULL;
     alpha_buf_len = 0;
     if (s->alpha_enc_ctx) {
-        alpha_buf_len = s->encoder->close(s->alpha_enc_ctx, &alpha_buf);
+        alpha_buf_len = s->encoder_alpha->close(s->alpha_enc_ctx, &alpha_buf);
         if (alpha_buf_len < 0) {
             fprintf(stderr, "Error while encoding picture (alpha plane)\n");
             exit(1);
@@ -2576,7 +2578,7 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
                 ep->qp = p->alpha_qp;
             ep->chroma_format = 0;
 
-            s->alpha_enc_ctx = s->encoder->open(ep);
+            s->alpha_enc_ctx = s->encoder_alpha->open(ep);
             if (!s->alpha_enc_ctx) {
                 fprintf(stderr, "Error while opening alpha encoder\n");
                 exit(1);
@@ -2697,7 +2699,7 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
     s->encoder->encode(s->enc_ctx, img);
 
     if (img_alpha) {
-        s->encoder->encode(s->alpha_enc_ctx, img_alpha);
+        s->encoder_alpha->encode(s->alpha_enc_ctx, img_alpha);
         image_free(img_alpha);
     }
 
@@ -3042,15 +3044,14 @@ int main(int argc, char **argv)
     /* premul helps compression, so might as well */
     if (premultiplied_alpha < 0)
         premultiplied_alpha = !(p->lossless);
-    /* by default, use x265 if available unless content is RExt-y intra */
+    /* by default, use x265 if available unless content is RExt-y, lossy intra */
     if (p->encoder_type >= HEVC_ENCODER_COUNT) {
         p->encoder_type = 0;
 #if USE_X265
-        if(bit_depth == x265_max_bit_depth) {
-            if ((p->preferred_chroma_format == BPG_FORMAT_420 && !p->lossless)
-                || p->animated) {
+        if (bit_depth == x265_max_bit_depth && !p->lossless) {
+            if (p->animated || p->preferred_chroma_format == BPG_FORMAT_420_VIDEO
+                            || p->preferred_chroma_format == BPG_FORMAT_420)
                 p->encoder_type = HEVC_ENCODER_COUNT - 1;
-            }
         }
 #endif
     }
