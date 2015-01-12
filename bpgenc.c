@@ -3045,12 +3045,14 @@ int main(int argc, char **argv)
     /* by default, use x265 if available unless content is RExt-y intra */
     if (p->encoder_type >= HEVC_ENCODER_COUNT) {
         p->encoder_type = 0;
-        if (USE_X265 && bit_depth == x265_max_bit_depth) {
+#if USE_X265
+        if(bit_depth == x265_max_bit_depth) {
             if ((p->preferred_chroma_format == BPG_FORMAT_420 && !p->lossless)
                 || p->animated) {
                 p->encoder_type = HEVC_ENCODER_COUNT - 1;
             }
         }
+#endif
     }
 
     enc_ctx = bpg_encoder_open(p);

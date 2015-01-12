@@ -9,7 +9,10 @@ USE_X265=y
 # Enable the JCTVC code (best quality but slow) for the encoder
 USE_JCTVC=y
 # Compile bpgview (SDL and SDL_image libraries needed)
-#USE_BPGVIEW=y
+SDL_LIBS:=$(shell pkg-config --libs sdl)
+ifneq (,$(findstring lSDL, $(SDL_LIBS)))
+  USE_BPGVIEW=y
+endif
 # Enable it to use bit depths > 12 (need more tests to validate encoder)
 #USE_JCTVC_HIGH_BIT_DEPTH=y
 # Enable the cross compilation for Windows
@@ -153,7 +156,7 @@ LIBS+=-lm -lpthread
 
 BPGDEC_LIBS:=-lpng16 $(LIBS)
 BPGENC_LIBS+=-lpng16 -ljpeg $(LIBS)
-BPGVIEW_LIBS:=-lSDL_image -lSDL $(LIBS)
+BPGVIEW_LIBS:=-lSDL_image -lSDL $(SDL_LIBS) $(LIBS)
 
 endif #!CONFIG_WIN32
 
