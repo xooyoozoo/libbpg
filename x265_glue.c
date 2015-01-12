@@ -91,6 +91,7 @@ static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
     if (params->intra_only) {
         p->keyframeMax = 1; /* only I frames */
         p->totalFrames = 1;
+        p->rc.cuTree = 0;
     } else {
         p->keyframeMax = 250;
         p->totalFrames = 0;
@@ -122,7 +123,6 @@ static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
     p->rc.rateControlMode = X265_RC_CRF;
     p->rc.rfConstant = params->qp;
     p->rc.aqMode = X265_AQ_VARIANCE;
-    p->rc.cuTree = 1; /* should probably turn off for intra-only */
 
     p->bEnableWavefront = params->wpp;
     p->bLossless = params->lossless;
