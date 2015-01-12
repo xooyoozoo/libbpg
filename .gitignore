@@ -3,3 +3,4 @@
 *.o
 bpgdec
 bpgenc
+bpgview
