@@ -129,11 +129,13 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
     snprintf(buf, sizeof(buf),"--QP=%f", s->params.qp);
     add_opt(&argc, argv, buf);
 
-    snprintf(buf, sizeof(buf),"--LoopFilterBetaOffset_div2=%d", s->params.deblock);
-    add_opt(&argc, argv, buf);
-    snprintf(buf, sizeof(buf),"--LoopFilterTcOffset_div2=%d", s->params.deblock);
-    add_opt(&argc, argv, buf);
-
+    if (s->params.deblock != 0) {
+        add_opt(&argc, argv, "--DeblockingFilterControlPresent=1");
+        snprintf(buf, sizeof(buf),"--LoopFilterBetaOffset_div2=%d", s->params.deblock);
+        add_opt(&argc, argv, buf);
+        snprintf(buf, sizeof(buf),"--LoopFilterTcOffset_div2=%d", s->params.deblock);
+        add_opt(&argc, argv, buf);
+    }
     snprintf(buf, sizeof(buf),"--CbQpOffset=%d", s->params.chroma_offset);
     add_opt(&argc, argv, buf);
     snprintf(buf, sizeof(buf),"--CrQpOffset=%d", s->params.chroma_offset);
@@ -184,7 +186,18 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
             snprintf(buf, sizeof(buf), "--Frame%d=P 1 3 0.4624 0 0 0 1 1 -1 0", i + 1);
             add_opt(&argc, argv, buf);
         }
+
+        /* from default HM configs */
+        add_opt(&argc, argv, "--SearchRange=64");
+        add_opt(&argc, argv, "--FEN=1");
+        /* could be helpful */
+        if (s->params.chroma_format == 0 || s->params.compress_level <= 7) {
+            add_opt(&argc, argv, "--ECU=1");
+            add_opt(&argc, argv, "--CFM=1");
+            add_opt(&argc, argv, "--ESD=1");
+        }
     }
+
     add_opt(&argc, argv, "--TransformSkip=1");
     if (s->params.compress_level >= 9)
         add_opt(&argc, argv, "--TransformSkipLog2MaxSize=5");
