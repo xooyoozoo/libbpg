@@ -770,7 +770,7 @@ Void TEncCavlc::codeSliceHeader         ( TComSlice* pcSlice )
 #if SRPS_IN_SLICE
       {
         WRITE_FLAG( 0, "short_term_ref_pic_set_sps_flag");
-        codeShortTermRefPicSet(pcSlice->getSPS(), rps, true, 0);
+        codeShortTermRefPicSet(rps, true, 0);
       }
 #else
       if(pcSlice->getRPSidx() < 0)

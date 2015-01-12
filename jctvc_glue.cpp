@@ -126,7 +126,17 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
     snprintf(buf, sizeof(buf),"--InputChromaFormat=%s", str);
     add_opt(&argc, argv, buf);
 
-    snprintf(buf, sizeof(buf),"--QP=%d", s->params.qp);
+    snprintf(buf, sizeof(buf),"--QP=%f", s->params.qp);
+    add_opt(&argc, argv, buf);
+
+    snprintf(buf, sizeof(buf),"--LoopFilterBetaOffset_div2=%d", s->params.deblock);
+    add_opt(&argc, argv, buf);
+    snprintf(buf, sizeof(buf),"--LoopFilterTcOffset_div2=%d", s->params.deblock);
+    add_opt(&argc, argv, buf);
+
+    snprintf(buf, sizeof(buf),"--CbQpOffset=%d", s->params.chroma_offset);
+    add_opt(&argc, argv, buf);
+    snprintf(buf, sizeof(buf),"--CrQpOffset=%d", s->params.chroma_offset);
     add_opt(&argc, argv, buf);
 
     snprintf(buf, sizeof(buf),"--SEIDecodedPictureHash=%d",
@@ -176,12 +186,24 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
         }
     }
     add_opt(&argc, argv, "--TransformSkip=1");
-    add_opt(&argc, argv, "--TransformSkipFast=1");
+    if (s->params.compress_level >= 9)
+        add_opt(&argc, argv, "--TransformSkipLog2MaxSize=5");
+    else
+        add_opt(&argc, argv, "--TransformSkipFast=1");
 
     /* Note: Format Range extension */
     if (s->params.chroma_format == BPG_FORMAT_444) {
         add_opt(&argc, argv, "--CrossComponentPrediction=1");
     }
+
+    /* Class F (YUV420 gaming/screen/text content) benefits without any speed change */
+    add_opt(&argc, argv, "--SingleSignificanceMapContext");
+    add_opt(&argc, argv, "--ImplicitResidualDPCM");
+    /* current bpgdec problem with some RExt Tools and WPP */
+    if (s->params.wpp)
+        add_opt(&argc, argv, "--WaveFrontSynchro=1");
+    else
+        add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
 
     if (s->params.lossless) {
         add_opt(&argc, argv, "--CostMode=lossless");
@@ -190,8 +212,10 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
         add_opt(&argc, argv, "--TransquantBypassEnableFlag");
         add_opt(&argc, argv, "--CUTransquantBypassFlagForce");
         add_opt(&argc, argv, "--ImplicitResidualDPCM");
-        add_opt(&argc, argv, "--GolombRiceParameterAdaptation");
         add_opt(&argc, argv, "--HadamardME=0");
+    } else {
+        /* current bpgdec problem with transform_skip_rotation and bypass */
+        add_opt(&argc, argv, "--ResidualRotation");
     }
 
 #if 0

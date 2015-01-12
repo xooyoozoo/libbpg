@@ -5,11 +5,11 @@
 # Enable compilation of Javascript decoder with Emscripten
 #USE_EMCC=y
 # Enable x265 for the encoder (you must install it before)
-#USE_X265=y
+USE_X265=y
 # Enable the JCTVC code (best quality but slow) for the encoder
 USE_JCTVC=y
 # Compile bpgview (SDL and SDL_image libraries needed)
-USE_BPGVIEW=y
+#USE_BPGVIEW=y
 # Enable it to use bit depths > 12 (need more tests to validate encoder)
 #USE_JCTVC_HIGH_BIT_DEPTH=y
 # Enable the cross compilation for Windows
@@ -38,7 +38,7 @@ EMCC=emcc
 
 PWD:=$(shell pwd)
 
-CFLAGS:=-Os -Wall -MMD -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -fno-math-errno -fno-signed-zeros -fno-tree-vectorize -fomit-frame-pointer
+CFLAGS:=-O3 -march=core2 -Wall -MMD -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -fno-math-errno -fno-signed-zeros -fno-tree-vectorize -fomit-frame-pointer
 CFLAGS+=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_REENTRANT
 CFLAGS+=-I.
 CFLAGS+=-DCONFIG_BPG_VERSION=\"$(shell cat VERSION)\"
@@ -53,7 +53,7 @@ EMLDFLAGS+=-s NO_FILESYSTEM=1 -s NO_BROWSER=1
 EMLDFLAGS+=-O3 --memory-init-file 0 --closure 1 --post-js post.js
 EMCFLAGS:=$(CFLAGS)
 
-LDFLAGS=-g
+LDFLAGS=-lz -flto
 ifdef CONFIG_APPLE
 LDFLAGS+=-Wl,-dead_strip
 else
@@ -134,8 +134,8 @@ endif # USE_JCTVC
 ifdef CONFIG_WIN32
 
 LDFLAGS+=-static
-BPGDEC_LIBS:=-Wl,-dy -lpng -lz -Wl,-dn
-BPGENC_LIBS+=-Wl,-dy -lpng -ljpeg -lz -Wl,-dn
+BPGDEC_LIBS:=-Wl,-dy -lpng16 -lz -Wl,-dn
+BPGENC_LIBS+=-Wl,-dy -lpng16 -ljpeg -lz -Wl,-dn
 BPGVIEW_LIBS:=-lmingw32 -lSDLmain -Wl,-dy -lSDL_image -lSDL -Wl,-dn -mwindows
 
 else
@@ -147,8 +147,8 @@ LIBS:=-lrt
 endif # !CONFIG_APPLE
 LIBS+=-lm -lpthread
 
-BPGDEC_LIBS:=-lpng $(LIBS)
-BPGENC_LIBS+=-lpng -ljpeg $(LIBS)
+BPGDEC_LIBS:=-lpng16 $(LIBS)
+BPGENC_LIBS+=-lpng16 -ljpeg $(LIBS)
 BPGVIEW_LIBS:=-lSDL_image -lSDL $(LIBS)
 
 endif #!CONFIG_WIN32

@@ -50,11 +50,18 @@ typedef struct {
     int bit_depth; /* 8-14 */
     int intra_only; /* 0-1 */
 
-    int qp; /* quantizer 0-51 */
     int lossless; /* 0-1 lossless mode */
     int sei_decoded_picture_hash; /* 0=no hash, 1=MD5 hash */
     int compress_level; /* 1-9 */
     int verbose;
+
+    double qp; /* quantizer 0-51 */
+    double aq; /* 0.0 to 3.0 */
+    double psyrd; /* 0.0 to 2.0 */
+    double psyrdoq; /* 0.0 to 50.0 */
+    int chroma_offset; /* -6 to 6 */
+    int deblock; /* -6 to 6 */
+    int wpp; /* 0 or 1 */
 } HEVCEncodeParams;
 
 typedef struct HEVCEncoderContext HEVCEncoderContext;

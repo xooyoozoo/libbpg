@@ -101,21 +101,30 @@ static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
     p->bEnableAMP = 1; /* cannot use 0 due to header restriction */
     p->internalBitDepth = params->bit_depth;
     p->bEmitInfoSEI = 0;
-    if (params->verbose)
+    if (params->verbose) {
+        p->bEnablePsnr = 1;
         p->logLevel = X265_LOG_INFO;
-    else
+    } else
         p->logLevel = X265_LOG_NONE;
 
     /* dummy frame rate */
     p->fpsNum = 25;
     p->fpsDenom = 1;
 
-    p->rc.rateControlMode = X265_RC_CQP;
-    /* XXX: why do we need this offset to match the JCTVC quality ? */
-    if (params->bit_depth == 10)
-        p->rc.qp = params->qp + 7;
-    else
-        p->rc.qp = params->qp + 1;
+    p->psyRd = params->psyrd;
+    p->psyRdoq = params->psyrdoq;
+    p->deblockingFilterBetaOffset = params->deblock;
+    p->deblockingFilterTCOffset = params->deblock;
+    /* sometimes, psy seems to cause blatant chroma noise */
+    p->cbQpOffset = params->chroma_offset - (int)(0.5 + p->psyRd);
+    p->crQpOffset = p->cbQpOffset;
+
+    p->rc.rateControlMode = X265_RC_CRF;
+    p->rc.rfConstant = params->qp;
+    p->rc.aqMode = X265_AQ_VARIANCE;
+    p->rc.cuTree = 1; /* should probably turn off for intra-only */
+
+    p->bEnableWavefront = params->wpp;
     p->bLossless = params->lossless;
 
     s->enc = x265_encoder_open(p);
@@ -186,7 +195,9 @@ static int x265_close(HEVCEncoderContext *s, uint8_t **pbuf)
         if (ret <= 0)
             break;
         for(i = 0; i < nal_count; i++) {
-            add_nal(s, p_nal[i].payload, p_nal[i].sizeBytes);
+            /* only allow expected NAL types */
+            if (p_nal[i].type == 40 || (p_nal[i].type / NAL_UNIT_PPS) <= 1)
+                add_nal(s, p_nal[i].payload, p_nal[i].sizeBytes);
         }
     }
 

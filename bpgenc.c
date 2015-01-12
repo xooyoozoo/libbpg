@@ -32,6 +32,11 @@
 #include <png.h>
 #include <jpeglib.h>
 
+/* need this to determine whether x265 can output desired bitdepth */
+#if defined(USE_X265)
+#include "x265.h"
+#endif
+
 #include "bpgenc.h"
 
 typedef uint16_t PIXEL;
@@ -1720,6 +1725,98 @@ static int dyn_buf_resize(DynBuf *s, int size)
     return 0;
 }
 
+static inline int gol_to_signed(uint32_t ueg)
+{
+    if (ueg % 2 == 0)
+        return -1 * (ueg / 2);
+    else
+        return (ueg + 1) / 2;
+}
+
+/* Obtain color planes's base QP to set JCTVC alpha QP */
+static int get_pic_base_qp(const uint8_t *buf, int buf_len)
+{
+    int nal_unit_type, nal_len, idx, i;
+    int output_flag_present_flag, num_extra_slice_header_bits;
+    int init_qp_minus26, slice_qp_delta;
+    uint8_t *nal_buf;
+    GetBitState gb_s, *gb = &gb_s;
+
+    /* VPS NAL */
+    idx = extract_nal(&nal_buf, &nal_len, buf, buf_len);
+    free(nal_buf);
+    /* SPS NAL */
+    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    free(nal_buf);
+
+    /* PPS NAL */
+    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
+    if (nal_unit_type != 34) {
+        free(nal_buf);
+        fprintf(stderr, "expecting PPS nal (%d)\n", nal_unit_type);
+        return -1;
+    }
+    {
+        init_get_bits(gb, nal_buf, nal_len);
+        skip_bits(gb, 16);  // nal header
+
+        get_ue_golomb(gb);
+        get_ue_golomb(gb);
+        skip_bits(gb, 1);   //dependent_slice_segments_enabled_flag
+        output_flag_present_flag = get_bits(gb, 1);
+        num_extra_slice_header_bits = get_bits(gb, 3);
+        skip_bits(gb, 1);   //sign_data_hiding_enabled_flag
+        skip_bits(gb, 1);   //cabac_init_present_flag
+        get_ue_golomb(gb);  //num_ref_idx_l0_default_active_minus1
+        get_ue_golomb(gb);  //num_ref_idx_l1_default_active_minus1
+        init_qp_minus26 = gol_to_signed(get_ue_golomb(gb));
+    }
+    free(nal_buf);
+
+    /* IDR NAL */
+    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
+    if (nal_unit_type != 19 && 20 != nal_unit_type) {
+        free(nal_buf);
+        fprintf(stderr, "expecting IDR nal (%d)\n", nal_unit_type);
+        return -1;
+    }
+    {
+        init_get_bits(gb, nal_buf, nal_len);
+        skip_bits(gb, 16);  // nal header
+
+        skip_bits(gb, 1);   //first_slice_segment_in_pic_flag
+        skip_bits(gb, 1);   //no_output_of_prior_pics_flag
+        get_ue_golomb(gb);  //slice_pic_parameter_set_id
+
+        // [...] is first_slice_segment_in_pic
+
+        for (i = 0; i < num_extra_slice_header_bits; i++)
+            skip_bits(gb, 1);   //slice_reserved_flag[ i ]
+        get_ue_golomb(gb);      //slice_type
+        if (output_flag_present_flag)
+            skip_bits(gb, 1);   //pic_output_flag
+
+        // [...] not separate colour plane
+        // [...] is IDR
+
+        // TODO: determine SAO flag programatically. For now, always enc SAO
+        if (1) {
+            skip_bits(gb, 1);   //slice_sao_luma_flag
+            // chroma array type not 0 because this is not monochrome
+            skip_bits(gb, 1);   //slice_sao_chroma_flag
+        }
+
+        // [...] not P or B slice
+
+        slice_qp_delta = gol_to_signed(get_ue_golomb(gb));
+    }
+    free(nal_buf);
+
+    return 26 + init_qp_minus26 + slice_qp_delta;
+}
+
 /* suppress the VPS NAL and keep only the useful part of the SPS
    header. The decoder can rebuild a valid HEVC stream if needed. */
 static int build_modified_sps(uint8_t **pout_buf, int *pout_buf_len,
@@ -2204,8 +2301,15 @@ static HEVCEncoder *hevc_encoder_tab[HEVC_ENCODER_COUNT] = {
 typedef struct BPGEncoderContext BPGEncoderContext;
 
 typedef struct BPGEncoderParameters {
-    int qp; /* 0 ... 51 */
-    int alpha_qp; /* -1 ... 51. -1 means same as qp */
+    double qp; /* 0 ... 51 */
+    double alpha_qp; /* -1 ... 51. -1 means same as qp */
+    double aq;
+    double psyrd;
+    double psyrdoq;
+    int chroma_offset;
+    int deblock;
+    int wpp;
+
     int lossless; /* true if lossless compression (qp and alpha_qp are
                      ignored) */
     BPGImageFormatEnum preferred_chroma_format;
@@ -2258,6 +2362,16 @@ BPGEncoderParameters *bpg_encoder_param_alloc(void)
     p->frame_delay_num = 1;
     p->frame_delay_den = 25;
     p->loop_count = 0;
+
+    p->qp = -1;
+    p->aq = 1.0;
+    p->chroma_offset = 0;
+    p->deblock = -2;
+    p->psyrd = 0.8;
+    p->psyrdoq = 2.4;
+    p->wpp = 0;
+    p->encoder_type = HEVC_ENCODER_COUNT;
+
     return p;
 }
 
@@ -2358,6 +2472,11 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
 
     /* extract the alpha plane */
     if (img->has_alpha) {
+        if (!USE_JCTVC) {
+            fprintf(stderr, "Need JCTVC encoder for extra monochrome plane\n");
+            exit(1);
+        }
+
         int c_idx;
 
         img_alpha = malloc(sizeof(Image));
@@ -2428,6 +2547,22 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
         ep->sei_decoded_picture_hash = p->sei_decoded_picture_hash;
         ep->compress_level = p->compress_level;
         ep->verbose = p->verbose;
+
+        ep->aq = p->aq;
+        ep->chroma_offset = p->chroma_offset;
+        ep->deblock = p->deblock;
+        ep->psyrd = p->psyrd;
+        ep->psyrdoq = p->psyrdoq;
+        ep->wpp = p->wpp;
+
+        /* WPP benefits most/all future decoders. Auto-on if img not tiny. */
+        if (img->w > 128 && img->h > 128)
+            ep->wpp = 1;
+        /* color & alpha must have same WPP flag, but bpgdec dislikes WPP + rice param adapt */
+        /* turn off wpp when lossless when that tool is useful (444) or at slowest levels */
+        if (p->lossless && (img->format == BPG_FORMAT_444 || p->compress_level >= 9)
+                        && (img_alpha || p->encoder_type == HEVC_ENCODER_JCTVC))
+            ep->wpp = 0;
 
         s->enc_ctx = s->encoder->open(ep);
         if (!s->enc_ctx) {
@@ -2647,33 +2782,39 @@ void help(int is_full)
            "Main options:\n"
            "-h                   show the full help (including the advanced options)\n"
            "-o outfile           set output filename (default = %s)\n"
-           "-q qp                set quantizer parameter (smaller gives better quality,\n"
-           "                     range: 0-51, default = %d)\n"
+           "-q quality           set quality/quantization ( #:# shorthand to also set alpha,\n"
+           "                         smaller gives better quality, range: 0-51.0, default = %d)\n"
            "-f cfmt              set the preferred chroma format (420, 422, 444,\n"
-           "                     default=420)\n"
+           "                         default=420)\n"
            "-c color_space       set the preferred color space (ycbcr, rgb, ycgco,\n"
-           "                     ycbcr_bt709, ycbcr_bt2020, default=ycbcr)\n"
+           "                         ycbcr_bt709, ycbcr_bt2020, default=ycbcr)\n"
            "-b bit_depth         set the bit depth (8 to %d, default = %d)\n"
            "-lossless            enable lossless mode\n"
-           "-e encoder           select the HEVC encoder (%s, default = %s)\n"
+           "-e encoder           select encoder (%s, default: lossy 420 = %s, otherwise = %s)\n"
            "-m level             select the compression level (1=fast, 9=slow, default = %d)\n"
            "\n"
            "Animation options:\n"
            "-a                   generate animations from a sequence of images. Use %%d or\n"
-           "                     %%Nd (N = number of digits) in the filename to specify the\n"
-           "                     image index, starting from 0 or 1.\n"
+           "                         %%Nd (N = number of digits) in the filename to specify the\n"
+           "                         image index, starting from 0 or 1.\n"
            "-fps N               set the frame rate (default = 25)\n"
            "-loop N              set the number of times the animation is played. 0 means\n"
-           "                     infinite (default = 0)\n"
+           "                         infinite (default = 0)\n"
            "-delayfile file      text file containing one number per image giving the\n"
-           "                     display delay per image in centiseconds.\n"
+           "                         display delay per image in centiseconds.\n"
            , DEFAULT_OUTFILENAME, DEFAULT_QP, BIT_DEPTH_MAX, DEFAULT_BIT_DEPTH,
-           hevc_encoders, hevc_encoder_name[0], DEFAULT_COMPRESS_LEVEL);
+           hevc_encoders, hevc_encoder_name[HEVC_ENCODER_COUNT-1], hevc_encoder_name[0],
+           DEFAULT_COMPRESS_LEVEL);
 
     if (is_full) {
         printf("\nAdvanced options:\n"
+           "-aq                  set x265's AQ strength, where higher further prioritizes low-cost textural areas\n"
+           "                         (0.0 to 3.0, default = 1)\n"
+           "-chroma-offset       qp offset for 2nd and 3rd components (-6 to 6, default = 0)\n"
+           "-deblock             set offsets for lower/higher deblock strength (-6 to 6, default = -2)\n"
+           "-psy                 values for x265's psyRd:psyRdoq setting (0:0 to 2:50, default = 0.8:2.4)\n"
            "-alphaq              set quantizer parameter for the alpha channel (default = same as -q value)\n"
-           "-premul              store the color with premultiplied alpha\n"
+           "-premul              store the color with premultiplied alpha (0 or 1, default 1 for lossy)\n"
            "-limitedrange        encode the color data with the limited range of video\n"
            "-hash                include MD5 hash in HEVC bitstream\n"
            "-keepmetadata        keep the metadata (from JPEG: EXIF, ICC profile, XMP, from PNG: ICC profile)\n"
@@ -2690,10 +2831,14 @@ struct option long_opts[] = {
     { "alphaq", required_argument },
     { "lossless", no_argument },
     { "limitedrange", no_argument },
-    { "premul", no_argument },
+    { "premul", required_argument },
     { "loop", required_argument },
     { "fps", required_argument },
     { "delayfile", required_argument },
+    { "aq", required_argument },
+    { "chroma-offset", required_argument },
+    { "deblock", required_argument },
+    { "psy", required_argument },
     { NULL },
 };
 
@@ -2717,7 +2862,7 @@ int main(int argc, char **argv)
     keep_metadata = 0;
     bit_depth = DEFAULT_BIT_DEPTH;
     limited_range = 0;
-    premultiplied_alpha = 0;
+    premultiplied_alpha = -1;
     frame_delay_file = NULL;
 
     for(;;) {
@@ -2734,7 +2879,7 @@ int main(int argc, char **argv)
                 keep_metadata = 1;
                 break;
             case 2:
-                p->alpha_qp = atoi(optarg);
+                p->alpha_qp = atof(optarg);
                 if (p->alpha_qp < 0 || p->alpha_qp > 51) {
                     fprintf(stderr, "alpha_qp must be between 0 and 51\n");
                     exit(1);
@@ -2751,7 +2896,8 @@ int main(int argc, char **argv)
                 limited_range = 1;
                 break;
             case 5:
-                premultiplied_alpha = 1;
+                if (1 == sscanf(optarg, "%d", &premultiplied_alpha))
+                    premultiplied_alpha = premultiplied_alpha > 1 ? 1 : premultiplied_alpha;
                 break;
             case 6:
                 p->loop_count = strtoul(optarg, NULL, 0);
@@ -2767,6 +2913,25 @@ int main(int argc, char **argv)
             case 8:
                 frame_delay_file = optarg;
                 break;
+            case 9:
+                p->aq = atof(optarg);
+                p->aq = p->aq <= 0 ? 0.0 : p->aq >= 3 ? 3.0 : p->aq;
+                break;
+            case 10:
+                p->chroma_offset = atoi(optarg);
+                p->chroma_offset = p->chroma_offset <= -6 ? -6 : p->chroma_offset >= 6 ? 6 : p->chroma_offset;
+                break;
+            case 11:
+                p->deblock = atoi(optarg);
+                p->deblock = p->deblock <= -6 ? -6 : p->deblock >= 6 ? 6 : p->deblock;
+                break;
+            case 12:
+                if (2 != sscanf(optarg, "%lf:%lf", &p->psyrd, &p->psyrdoq))
+                    p->psyrd = atof(optarg);
+
+                p->psyrd = p->psyrd <= 0 ? 0.0 : p->psyrd >= 2 ? 2.0 : p->psyrd;
+                p->psyrdoq = p->psyrdoq <= 0 ? 0.0 : p->psyrdoq >= 50 ? 50.0 : p->psyrdoq;
+                break;
             default:
                 goto show_help;
             }
@@ -2776,9 +2941,15 @@ int main(int argc, char **argv)
             help(1);
             break;
         case 'q':
-            p->qp = atoi(optarg);
-            if (p->qp < 0 || p->qp > 51) {
-                fprintf(stderr, "qp must be between 0 and 51\n");
+            if (2 != sscanf(optarg, "%lf:%lf", &p->qp, &p->alpha_qp)) {
+                p->qp = atof(optarg);
+                if (p->qp < 0 || p->qp > 51) {
+                    fprintf(stderr, "quality must be between 0.0 and 51.0\n");
+                    exit(1);
+                }
+            } else if (p->qp < 0 || p->qp > 51 || p->alpha_qp < 0 || p->alpha_qp > 51) {
+                fprintf(stderr, "main (%.2lf) and alpha (%.2lf) q must be between 0 and 51\n",
+                                 p->qp, p->alpha_qp);
                 exit(1);
             }
             break;
@@ -2867,6 +3038,20 @@ int main(int argc, char **argv)
     if (!f) {
         perror(outfilename);
         exit(1);
+    }
+
+    /* premul helps compression, so might as well */
+    if (premultiplied_alpha < 0)
+        premultiplied_alpha = !(p->lossless);
+    /* by default, use x265 if available unless content is RExt-y intra */
+    if (p->encoder_type >= HEVC_ENCODER_COUNT) {
+        p->encoder_type = 0;
+        if (USE_X265 && bit_depth == x265_max_bit_depth) {
+            if ((p->preferred_chroma_format == BPG_FORMAT_420 && !p->lossless)
+                || p->animated) {
+                p->encoder_type = HEVC_ENCODER_X265;
+            }
+        }
     }
 
     enc_ctx = bpg_encoder_open(p);
