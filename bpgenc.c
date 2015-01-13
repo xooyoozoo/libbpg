@@ -1209,7 +1209,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
     BPGMetaData *first_md = NULL;
     uint32_t comp_hv;
 
-    if (lossless) {
+    if (lossless && out_bit_depth != 8) {
         fprintf(stderr, "8bit jpg shouldn\'t be losslessly re-encoded in %dbit\n", out_bit_depth);
         return NULL;
     }
