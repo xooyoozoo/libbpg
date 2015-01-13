@@ -2946,8 +2946,19 @@ int main(int argc, char **argv)
                 p->loop_count = strtoul(optarg, NULL, 0);
                 break;
             case 7:
-                p->frame_delay_num = 1;
-                p->frame_delay_den = strtoul(optarg, NULL, 0);
+                if (2 != sscanf(optarg, "%hu/%hu", &p->frame_delay_den, &p->frame_delay_num)) {
+                    double fps = atof(optarg);
+                    if (fps > 0 && fps <= (1<<16)/1000) {
+                        p->frame_delay_num = 1000;
+                        p->frame_delay_den = (int)(fps * 1000 + .5);
+                    } else if (fps > 0 && fps <= (1<<16)/100) {
+                        p->frame_delay_num = 100;
+                        p->frame_delay_den = (int)(fps * 100 + .5);
+                    } else {
+                        p->frame_delay_num = 1;
+                        p->frame_delay_den = strtoul(optarg, NULL, 0);
+                    }
+                }
                 if (p->frame_delay_den == 0) {
                     fprintf(stderr, "invalid frame rate\n");
                     exit(1);
