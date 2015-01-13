@@ -915,7 +915,7 @@ void bpg_md_free(BPGMetaData *md)
 
 Image *read_png(BPGMetaData **pmd,
                 FILE *f, BPGColorSpaceEnum color_space, int out_bit_depth,
-                int limited_range, int premultiplied_alpha)
+                int limited_range, int premultiplied_alpha, int lossless)
 {
     png_structp png_ptr;
     png_infop info_ptr;
@@ -965,6 +965,15 @@ Image *read_png(BPGMetaData **pmd,
         break;
     }
     assert(bit_depth == 8 || bit_depth == 16);
+    if (lossless) {
+        if (bit_depth < out_bit_depth) {
+            fprintf(stderr, "HBD lossless encode of low depth input is wasteful\n");
+            png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+            return NULL;
+        }
+        if (bit_depth > out_bit_depth)
+            fprintf(stderr, "Input is downshifted. Might not be lossless\n");
+    }
 
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
     if (bit_depth == 16) {
@@ -1187,7 +1196,7 @@ static BPGMetaData *jpeg_get_metadata(jpeg_saved_marker_ptr first_marker)
 }
 
 Image *read_jpeg(BPGMetaData **pmd, FILE *f,
-                 int out_bit_depth)
+                 int out_bit_depth, int lossless)
 {
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
@@ -1245,6 +1254,8 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
             format = BPG_FORMAT_420;
             break;
         default:
+            if (lossless)
+                goto unsupported;
             cinfo.raw_data_out = FALSE;
             format = BPG_FORMAT_444;
             cinfo.out_color_space = JCS_YCbCr;
@@ -1277,6 +1288,8 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
             color_space = BPG_CS_YCbCr;
             break;
         default:
+            if (lossless)
+                goto unsupported;
             cinfo.raw_data_out = FALSE;
             format = BPG_FORMAT_444;
             cinfo.out_color_space = JCS_CMYK;
@@ -1296,6 +1309,8 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
         break;
     default:
     unsupported:
+        /* BPG supports 422 but not 440. Reprocessing 440 to 444 != lossless */
+        fprintf(stderr, "Lossless=%d\n", lossless);
         fprintf(stderr, "Unsupported JPEG parameters (cs=%d n_comp=%d comp_hv=%x)\n",
                 cinfo.jpeg_color_space, cinfo.num_components, comp_hv);
         img = NULL;
@@ -1417,9 +1432,8 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
 
     first_md = jpeg_get_metadata(cinfo.marker_list);
 
- the_end:
     jpeg_finish_decompress(&cinfo);
-
+ the_end:
     jpeg_destroy_decompress(&cinfo);
     *pmd = first_md;
     return img;
@@ -1427,7 +1441,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
 
 Image *load_image(BPGMetaData **pmd, const char *infilename,
                   BPGColorSpaceEnum color_space, int bit_depth,
-                  int limited_range, int premultiplied_alpha)
+                  int limited_range, int premultiplied_alpha, int lossless)
 {
     FILE *f;
     int is_png;
@@ -1451,9 +1465,9 @@ Image *load_image(BPGMetaData **pmd, const char *infilename,
 
     if (is_png) {
         img = read_png(&md, f, color_space, bit_depth, limited_range,
-                       premultiplied_alpha);
+                       premultiplied_alpha, lossless);
     } else {
-        img = read_jpeg(&md, f, bit_depth);
+        img = read_jpeg(&md, f, bit_depth, lossless);
     }
     fclose(f);
     *pmd = md;
@@ -2366,6 +2380,7 @@ BPGEncoderParameters *bpg_encoder_param_alloc(void)
     p->frame_delay_den = 25;
     p->loop_count = 0;
 
+    p->lossless = 0;
     p->aq = 1.0;
     p->chroma_offset = 0;
     p->deblock = -2;
@@ -3045,11 +3060,6 @@ int main(int argc, char **argv)
                         BIT_DEPTH_MAX);
                 exit(1);
             }
-            if (bit_depth != 8 && p->lossless) {
-                fprintf(stderr, "Non-8bit lossless encodes of 8bit input is wasteful. ");
-                fprintf(stderr, "16bit PNGs, the only other option, won\'t be processed losslessly.\n");
-                exit(1);
-            }
             break;
         case 'v':
             p->verbose++;
@@ -3133,7 +3143,7 @@ int main(int argc, char **argv)
                 exit(1);
             }
             img = load_image(&md, filename, color_space, bit_depth, limited_range,
-                             premultiplied_alpha);
+                             premultiplied_alpha, p->lossless);
             if (!img) {
                 if (frame_num == 0)
                     continue; /* accept to start at 0 or 1 */
@@ -3174,7 +3184,7 @@ int main(int argc, char **argv)
         bpg_encoder_encode(enc_ctx, NULL, my_write_func, f);
     } else {
         img = load_image(&md, infilename, color_space, bit_depth, limited_range,
-                         premultiplied_alpha);
+                         premultiplied_alpha, p->lossless);
         if (!img) {
             fprintf(stderr, "Could not read '%s'\n", infilename);
             exit(1);
