@@ -1209,6 +1209,11 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
     BPGMetaData *first_md = NULL;
     uint32_t comp_hv;
 
+    if (lossless) {
+        fprintf(stderr, "8bit jpg shouldn\'t be losslessly re-encoded in %dbit\n", out_bit_depth);
+        return NULL;
+    }
+
     cinfo.err = jpeg_std_error(&jerr);
     jpeg_create_decompress(&cinfo);
 
@@ -1309,7 +1314,7 @@ Image *read_jpeg(BPGMetaData **pmd, FILE *f,
         break;
     default:
     unsupported:
-        /* BPG supports 422 but not 440. Reprocessing 440 to 444 != lossless */
+        /* BPG doesn't support all possible subsamples. Reprocessing to 444 != lossless */
         fprintf(stderr, "Lossless=%d\n", lossless);
         fprintf(stderr, "Unsupported JPEG parameters (cs=%d n_comp=%d comp_hv=%x)\n",
                 cinfo.jpeg_color_space, cinfo.num_components, comp_hv);
@@ -2439,25 +2444,7 @@ static int bpg_encoder_encode_trailer(BPGEncoderContext *s,
 {
     uint8_t *hevc_buf;
     int hevc_buf_len;
-/*
-    out_buf_len = s->encoder->close(s->enc_ctx, &out_buf);
-    if (out_buf_len < 0) {
-        fprintf(stderr, "Error while encoding picture\n");
-        exit(1);
-    }
-    s->enc_ctx = NULL;
 
-    alpha_buf = NULL;
-    alpha_buf_len = 0;
-    if (s->alpha_enc_ctx) {
-        alpha_buf_len = s->alpha_encoder->close(s->alpha_enc_ctx, &alpha_buf);
-        if (alpha_buf_len < 0) {
-            fprintf(stderr, "Error while encoding picture (alpha plane)\n");
-            exit(1);
-        }
-        s->alpha_enc_ctx = NULL;
-    }
-*/
     hevc_buf = NULL;
     hevc_buf_len = build_modified_hevc(&hevc_buf, s->color_buf, out_buf_len,
                                        s->alpha_buf, alpha_buf_len,
@@ -2686,7 +2673,6 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
 
             has_alpha = (img_alpha != NULL);
             has_extension = (extension_buf_len > 0);
-
 
             if (has_alpha) {
                 if (img->has_w_plane) {
