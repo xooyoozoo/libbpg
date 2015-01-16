@@ -98,9 +98,12 @@ typedef struct BPGMuxerContext {
     int cmyk;
 } BPGMuxerContext;
 
-static int parse_slice(const uint8_t *buf, const int len, const int nut, const HEVCVideoConfig *cfg)
+static int parse_slice(const uint8_t *buf, const int len, const int nut,
+                       const HEVCVideoConfig *cfg,
+                       int *last_poc)
 {
     int is_IRAP, first_slice_segment_in_pic;
+    int slice_pic_order_cnt_lsb;
     GetBitState gb_s, *gb = &gb_s;
 
     if (nut <= TRAIL_R && (buf[2] & 0x80)) {
@@ -119,11 +122,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
 
     first_slice_segment_in_pic = get_bits(gb, 1);
     if (is_IRAP) {
-        skip_bits(gb, 1);
-        /*if (get_bits(gb, 1) == 0) {
-            fprintf(stderr, "no_output_of_prior_pics_flag should be 1 for IRAPs\n");
-            return -1;
-        }*/
+        skip_bits(gb, 1);   /* no_output_of_prior_pics_flag */
     }
     if (get_ue_golomb(gb) != 0) {
         fprintf(stderr, "slice_pic_parameter_set_id should be 0\n");
@@ -146,6 +145,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
         skip_bits(gb, slice_segment_addr_len); /* slice_segment_address */
     }
 
+    slice_pic_order_cnt_lsb = -1;
     if (!cfg->dependent_slices) {
         int i, slice_type;
 
@@ -159,7 +159,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
         //    return -1;
         //}
         if (slice_type != 2 && is_IRAP) {
-            fprintf(stderr, "slice_type (%d) expected to be IRAP\n", slice_type);
+            fprintf(stderr, "slice_type (%d) supposed to be IRAP\n", slice_type);
             return -1;
         }
 
@@ -170,10 +170,17 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
         // [...] not separate colour plane
 
         if (nut != IDR_W_RADL && nut != IDR_N_LP) {
-            /* log2_max_poc_lsb is defined as 8 in BPG */
-            skip_bits(gb, 8);
-
             const int short_term_ref_pic_set_sps_flag = 0;
+            const int prev_poc = *last_poc;
+
+            /* log2_max_poc_lsb is defined as 8 in BPG */
+            slice_pic_order_cnt_lsb = get_bits(gb, 8);
+            if (slice_pic_order_cnt_lsb > 0 && slice_pic_order_cnt_lsb < prev_poc) {
+                fprintf(stderr, "input is not monotonically ordered (%d < %d)\n",
+                                 slice_pic_order_cnt_lsb, prev_poc);
+                return -1;
+            }
+
             if (get_bits(gb, 1) != short_term_ref_pic_set_sps_flag) {
                 fprintf(stderr, "short_term_ref_pic_set_sps_flag should be 0\n");
                 return -1;
@@ -196,15 +203,23 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
                 if (num_neg_pics) {
                     int delta_poc_s0_minus1;
                     delta_poc_s0_minus1 = get_ue_golomb(gb);
-                    if (delta_poc_s0_minus1 != 0) {
-                        fprintf(stderr, "warning: ref frame (%d) is not -1 POC\n", -1 - delta_poc_s0_minus1);
+                    if (delta_poc_s0_minus1 != 0 &&
+                        delta_poc_s0_minus1 >= (slice_pic_order_cnt_lsb - prev_poc)) {
+                        fprintf(stderr, "warning: ref frame (%d) extends beyond last POC (%d)\n",
+                                         slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1,
+                                         prev_poc);
                     }
                     skip_bits(gb, 1);   /* used_by_curr_pic_s0_flag */
                 }
             }
+        } else {
+            /* decoder has been refreshed */
+            slice_pic_order_cnt_lsb = 0;
         }
     }
 
+    if (slice_pic_order_cnt_lsb >= 0)
+        *last_poc = slice_pic_order_cnt_lsb;
 
     return 0;
 }
@@ -228,6 +243,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
     int color_space, pixel_format;
     int fps_num, fps_den;
     int tiles, wpp, dependent_slices;
+    int pps_idx;
 
     /* not all streams provide these, so create defaults */
     color_space = DEFAULT_COLORSPACE;
@@ -243,9 +259,12 @@ static int prepare_headers(HEVCVideoConfig *plane,
         goto bad_header_info;
 
     /* SPS NAL */
-    idx += extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
-    if (idx < 0)
+    ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
+    if (ret < 0)
         goto bad_header_info;
+    else
+        idx += ret;
+    pps_idx = idx;
     nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
     if (nal_unit_type != 33) {
         fprintf(stderr, "expecting SPS nal, got (%d)\n", nal_unit_type);
@@ -446,25 +465,35 @@ static int prepare_headers(HEVCVideoConfig *plane,
                     primaries = get_bits(gb, 8);
                     transfer = get_bits(gb, 8); /* transfer_characteristics */
                     matrix = get_bits(gb, 8); /* matrix_coeffs */
-                    if (primaries < 1 || primaries > 2) {
-                        fprintf(stderr, "only sRGB/BT709 color-space is supported (%d)\n", primaries);
-                        goto bad_header_info;
+                    if (primaries == 1 || primaries == 2) {
+                        color_space = BPG_CS_YCbCr_BT709;
+                    } else if (primaries >= 5 && primaries <= 7) {
+                        color_space = BPG_CS_YCbCr;
+                    } else if (primaries == 9) {
+                        color_space = BPG_CS_YCbCr_BT2020 + (matrix == 10);
+                    } else {
+                        fprintf(stderr, "warning: unsupported color space (%d)\n", primaries);
+                        primaries = 2; // unspecified
                     }
+
                     if (transfer != 2 && transfer != 13)
-                        fprintf(stderr, "warning: sRGB gamma will be assumed\n");
-                    if (matrix == 0) {
-                        color_space = BPG_CS_RGB; // GBR, probably
-                    } else if (matrix == 1 || matrix == 2) {
-                        color_space = BPG_CS_YCbCr_BT709; // YCbCr BT709, probably
-                    } else if (matrix == 4 || matrix == 5 || matrix == 6) {
-                        color_space = BPG_CS_YCbCr; // YCbCr BT601, probably
-                    } else if (matrix == 8) {
-                        color_space = BPG_CS_YCgCo; // YCgCo
-                    } else if (matrix == 9 || matrix == 10) {
-                        color_space = matrix - 5; // YCbCr BT2020 NCL and CL
-                    } else  {
-                        fprintf(stderr, "unsupported color space (%d)\n", matrix);
-                        goto bad_header_info;
+                        fprintf(stderr, "warning: sRGB gamma will likely be assumed\n");
+
+                    if (primaries == 2) {
+                        if (matrix == 0) {
+                            color_space = BPG_CS_RGB; // probably
+                        } else if (matrix == 1 || matrix == 2) {
+                            color_space = BPG_CS_YCbCr_BT709; // probably
+                        } else if (matrix == 4 || matrix == 5 || matrix == 6) {
+                            color_space = BPG_CS_YCbCr; // probably
+                        } else if (matrix == 8) {
+                            color_space = BPG_CS_YCgCo; // YCgCo
+                        } else if (matrix == 9 || matrix == 10) {
+                            color_space = matrix - 5; // YCbCr BT2020 NCL and CL
+                        } else  {
+                            fprintf(stderr, "unsupported color matrix coefficients (%d)\n", matrix);
+                            goto bad_header_info;
+                        }
                     }
                 }
             }
@@ -581,7 +610,6 @@ static int prepare_headers(HEVCVideoConfig *plane,
     }
 
     /* PPS NAL */
-    /* ret is used instead of idx because idx to store location of SPS's end */
     ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     if (ret < 0)
         goto bad_header_info;
@@ -690,6 +718,9 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     int msps_len, cidx, aidx, is_alpha, nal_len, first_nal, start, l;
     int nut;
 
+    /* used to keep track of poc order and make sure there's no reordering */
+    int last_poc = 0;
+
     dyn_buf_init(out_buf);
 
     /* add alpha MSPS */
@@ -750,7 +781,7 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
         if (nut >= AUD)
             continue;
         if ( !((start + 2 < nal_len) &&
-               (parse_slice(nal_buf + start, nal_len, nut, &s->color) >= 0)) ) {
+               (parse_slice(nal_buf + start, nal_len, nut, &s->color, &last_poc) >= 0)) ) {
             fprintf(stderr, "error while parsing (alpha? %d) NALs\n", is_alpha);
             goto fail;
         }
