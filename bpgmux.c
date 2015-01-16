@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <math.h>
 
+#include "bpgfmt.h"
 #include "libbpg.h"
 
 #define IMAGE_HEADER_MAGIC 0x425047fb
@@ -43,14 +44,6 @@ enum NALType {
     PREFIX_SEI = 39,
     SUFFIX_SEI = 40,
 };
-
-typedef struct BPGMetaData {
-    uint32_t tag;
-    uint8_t *buf;
-    int buf_len;
-    struct BPGMetaData *next;
-} BPGMetaData;
-
 
 typedef enum {
     HEVC_PARAL_NONE,
@@ -105,272 +98,6 @@ typedef struct BPGMuxerContext {
     int cmyk;
 } BPGMuxerContext;
 
-BPGMetaData *bpg_md_alloc(uint32_t tag)
-{
-    BPGMetaData *md;
-    md = malloc(sizeof(BPGMetaData));
-    memset(md, 0, sizeof(*md));
-    md->tag = tag;
-    return md;
-}
-
-void bpg_md_free(BPGMetaData *md)
-{
-    BPGMetaData *md_next;
-
-    while (md != NULL) {
-        md_next = md->next;
-        free(md->buf);
-        free(md);
-        md = md_next;
-    }
-}
-
-void *mallocz(size_t size)
-{
-    void *ptr;
-    ptr = malloc(size);
-    if (!ptr)
-        return NULL;
-    memset(ptr, 0, size);
-    return ptr;
-}
-
-/* return the position of the end of the NAL or -1 if error */
-static int find_nal_end(const uint8_t *buf, int buf_len)
-{
-    int idx;
-
-    idx = 0;
-    if (buf_len >= 4 &&
-        buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 1) {
-        idx = 4;
-    } else if (buf_len >= 3 &&
-               buf[0] == 0 && buf[1] == 0 && buf[2] == 1) {
-        idx = 3;
-    } else {
-        return -1;
-    }
-    /* NAL header */
-    if (idx + 2 > buf_len)
-        return -1;
-    /* find the last byte */
-    for(;;) {
-        if (idx + 2 >= buf_len) {
-            idx = buf_len;
-            break;
-        }
-        if (buf[idx] == 0 && buf[idx + 1] == 0 && buf[idx + 2] == 1)
-            break;
-        if (idx + 3 < buf_len &&
-            buf[idx] == 0 && buf[idx + 1] == 0 && buf[idx + 2] == 0 && buf[idx + 3] == 1)
-            break;
-        idx++;
-    }
-    return idx;
-}
-
-/* return the position of the end of the NAL or -1 if error */
-static int extract_nal(uint8_t **pnal_buf, int *pnal_len,
-                       const uint8_t *buf, int buf_len)
-{
-    int idx, start, end, len;
-    uint8_t *nal_buf;
-    int nal_len;
-
-    end = find_nal_end(buf, buf_len);
-    if (end < 0)
-        return -1;
-    if (buf[2] == 1)
-        start = 3;
-    else
-        start = 4;
-    len = end - start;
-
-    nal_buf = malloc(len);
-    nal_len = 0;
-    idx = start;
-    while (idx < end) {
-        if (idx + 2 < end && buf[idx] == 0 && buf[idx + 1] == 0 && buf[idx + 2] == 3) {
-            nal_buf[nal_len++] = 0;
-            nal_buf[nal_len++] = 0;
-            idx += 3;
-        } else {
-            nal_buf[nal_len++] = buf[idx++];
-        }
-    }
-    while (idx < end) {
-        nal_buf[nal_len++] = buf[idx++];
-    }
-    *pnal_buf = nal_buf;
-    *pnal_len = nal_len;
-    return idx;
-}
-
-/* big endian variable length 7 bit encoding */
-static void put_ue(uint8_t **pp, uint32_t v)
-{
-    uint8_t *p = *pp;
-    int i, j;
-
-    for(i = 1; i < 5; i++) {
-        if (v < (1 << (7 * i)))
-            break;
-    }
-    for(j = i - 1; j >= 1; j--)
-        *p++ = ((v >> (7 * j)) & 0x7f) | 0x80;
-    *p++ = v & 0x7f;
-    *pp = p;
-}
-
-typedef struct {
-    const uint8_t *buf;
-    int idx;
-    int buf_len;
-} GetBitState;
-
-static void init_get_bits(GetBitState *s, const uint8_t *buf, int buf_len)
-{
-    s->buf = buf;
-    s->buf_len = buf_len;
-    s->idx = 0;
-}
-
-static void skip_bits(GetBitState *s, int n)
-{
-    s->idx += n;
-}
-
-/* 1 <= n <= 25. return '0' bits if past the end of the buffer. */
-static uint32_t get_bits(GetBitState *s, int n)
-{
-    const uint8_t *buf = s->buf;
-    int p, i;
-    uint32_t v;
-
-    p = s->idx >> 3;
-    if ((p + 3) < s->buf_len) {
-        v = (buf[p] << 24) | (buf[p + 1] << 16) |
-            (buf[p + 2] << 8) | buf[p + 3];
-    } else {
-        v = 0;
-        for(i = 0; i < 3; i++) {
-            if ((p + i) < s->buf_len)
-                v |= buf[p + i] << (24 - i * 8);
-        }
-    }
-    v = (v >> (32 - (s->idx & 7) - n)) & ((1 << n) - 1);
-    s->idx += n;
-    return v;
-}
-
-/* 1 <= n <= 32 */
-static uint32_t get_bits_long(GetBitState *s, int n)
-{
-    uint32_t v;
-
-    if (n <= 25) {
-        v = get_bits(s, n);
-    } else {
-        n -= 16;
-        v = get_bits(s, 16) << n;
-        v |= get_bits(s, n);
-    }
-    return v;
-}
-
-/* at most 32 bits are supported */
-static uint32_t get_ue_golomb(GetBitState *s)
-{
-    int i;
-    i = 0;
-    for(;;) {
-        if (get_bits(s, 1))
-            break;
-        i++;
-        if (i == 32)
-            return 0xffffffff;
-    }
-    if (i == 0)
-        return 0;
-    else
-        return ((1 << i) | get_bits_long(s, i)) - 1;
-}
-
-typedef struct {
-    uint8_t *buf;
-    int idx;
-} PutBitState;
-
-static void init_put_bits(PutBitState *s, uint8_t *buf)
-{
-    s->buf = buf;
-    s->idx = 0;
-}
-
-static void put_bit(PutBitState *s, int bit)
-{
-    s->buf[s->idx >> 3] |= bit << (7 - (s->idx & 7));
-    s->idx++;
-}
-
-static void put_bits(PutBitState *s, int n, uint32_t v)
-{
-    int i;
-
-    for(i = 0; i < n; i++) {
-        put_bit(s, (v >> (n - 1 - i)) & 1);
-    }
-}
-
-static void put_ue_golomb(PutBitState *s, uint32_t v)
-{
-    uint32_t a;
-    int n;
-
-    v++;
-    n = 0;
-    a = v;
-    while (a != 0) {
-        a >>= 1;
-        n++;
-    }
-    if (n > 1)
-        put_bits(s, n - 1, 0);
-    put_bits(s, n, v);
-}
-
-typedef struct {
-    uint8_t *buf;
-    int size;
-    int len;
-} DynBuf;
-
-static void dyn_buf_init(DynBuf *s)
-{
-    s->buf = NULL;
-    s->size = 0;
-    s->len = 0;
-}
-
-static int dyn_buf_resize(DynBuf *s, int size)
-{
-    int new_size;
-    uint8_t *new_buf;
-
-    if (size <= s->size)
-        return 0;
-    new_size = (s->size * 3) / 2;
-    if (new_size < size)
-        new_size = size;
-    new_buf = realloc(s->buf, new_size);
-    if (!new_buf)
-        return -1;
-    s->buf = new_buf;
-    s->size = new_size;
-    return 0;
-}
-
 static int parse_slice(const uint8_t *buf, const int len, const int nut, const HEVCVideoConfig *cfg)
 {
     int is_IRAP, first_slice_segment_in_pic;
@@ -390,7 +117,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
     init_get_bits(gb, buf, len);
     skip_bits(gb, 16);  // nal header
 
-    first_slice_segment_in_pic = get_bits(gb, 1); 
+    first_slice_segment_in_pic = get_bits(gb, 1);
     if (is_IRAP) {
         skip_bits(gb, 1);
         /*if (get_bits(gb, 1) == 0) {
@@ -407,16 +134,16 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
         int slice_segment_addr_len;
         int w1, h1;
 
-        if (cfg->dependent_slices) 
+        if (cfg->dependent_slices)
             if (get_bits(gb, 1))
                 return 0;
-        
+
         /* add back padding to get to (multiple of min_cb_size) */
         w1 = (cfg->width  + cfg->min_cb_size - 1) & ~(cfg->min_cb_size - 1);
         h1 = (cfg->height + cfg->min_cb_size - 1) & ~(cfg->min_cb_size - 1);
         slice_segment_addr_len = lrint(ceil(log(w1 * h1) / log(2)));
 
-        get_bits(gb, slice_segment_addr_len); /* slice_segment_address */
+        skip_bits(gb, slice_segment_addr_len); /* slice_segment_address */
     }
 
     if (!cfg->dependent_slices) {
@@ -427,10 +154,10 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
             skip_bits(gb, 1);   /* slice_reserved_flag[ i ] */
 
         slice_type = get_ue_golomb(gb);
-        if (slice_type < 1 || slice_type > 2) {
-            fprintf(stderr, "slice_type (%d) should be I or P\n", slice_type);
-            return -1;
-        }
+        //if (slice_type < 1 || slice_type > 2) {
+        //    fprintf(stderr, "warning: slice_type (%d) should be I or P\n", slice_type);
+        //    return -1;
+        //}
         if (slice_type != 2 && is_IRAP) {
             fprintf(stderr, "slice_type (%d) expected to be IRAP\n", slice_type);
             return -1;
@@ -441,11 +168,11 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
             skip_bits(gb, 1);   /* pic_output_flag */
 
         // [...] not separate colour plane
-        
+
         if (nut != IDR_W_RADL && nut != IDR_N_LP) {
             /* log2_max_poc_lsb is defined as 8 in BPG */
             skip_bits(gb, 8);
-            
+
             const int short_term_ref_pic_set_sps_flag = 0;
             if (get_bits(gb, 1) != short_term_ref_pic_set_sps_flag) {
                 fprintf(stderr, "short_term_ref_pic_set_sps_flag should be 0\n");
@@ -453,20 +180,24 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut, const H
             }
 
             if (!short_term_ref_pic_set_sps_flag) {
-                int numNegPics, numPosPics;
-                
-                numNegPics = get_ue_golomb(gb);
-                numPosPics = get_ue_golomb(gb);
+                int num_neg_pics, num_pos_pics;
 
-                if (numNegPics > 1 || numPosPics > 0) {
-                    fprintf(stderr, "too many neg (%d) or pos (%d) refs\n", numNegPics, numPosPics);
+                num_neg_pics = get_ue_golomb(gb);
+                num_pos_pics = get_ue_golomb(gb);
+
+                if (num_neg_pics > 1 || num_pos_pics > 0) {
+                    fprintf(stderr, "too many neg (%d) or pos (%d) refs\n", num_neg_pics, num_pos_pics);
                     return -1;
                 }
+                if (slice_type == 0) {
+                    fprintf(stderr, "warning: ref usage is within spec, but B-slice (2 MVs per block) in use\n");
+                }
 
-                if (numNegPics) {
-                    /* delta_poc_s0_minus1 */
-                    if (get_ue_golomb(gb) != 0) {
-                        fprintf(stderr, "delta_poc_s0_minus1 should be 0\n");
+                if (num_neg_pics) {
+                    int delta_poc_s0_minus1;
+                    delta_poc_s0_minus1 = get_ue_golomb(gb);
+                    if (delta_poc_s0_minus1 != 0) {
+                        fprintf(stderr, "warning: ref frame (%d) is not -1 POC\n", -1 - delta_poc_s0_minus1);
                     }
                     skip_bits(gb, 1);   /* used_by_curr_pic_s0_flag */
                 }
@@ -947,35 +678,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
 }
 
-static int add_frame_duration_sei(DynBuf *out_buf, uint16_t frame_ticks)
-{
-    uint8_t nal_buf[128], *q;
-    int nut, nal_len;
-
-    q = nal_buf;
-    *q++ = 0x00;
-    *q++ = 0x00;
-    *q++ = 0x01;
-    nut = 39; /* prefix SEI NUT */
-    *q++ = (nut << 1);
-    *q++ = 1;
-    *q++ = 0xff;  /* payload_type = 257 */
-    *q++ = 0x02;
-    *q++ = 2; /* payload_size = 2 */
-    *q++ = frame_ticks >> 8;
-    *q++ = frame_ticks;
-    *q++ = 0x80; /* extra '1' bit and align to byte */
-    /* Note: the 0x00 0x00 b pattern with b <= 3 cannot happen, so no
-       need to escape */
-    nal_len = q - nal_buf;
-    if (dyn_buf_resize(out_buf, out_buf->len + nal_len) < 0)
-        return -1;
-    memcpy(out_buf->buf + out_buf->len, nal_buf, nal_len);
-    out_buf->len += nal_len;
-    return 0;
-}
-
-static int build_modified_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
+static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
                                int cbuf_len, int abuf_len,
                                FILE *fdelay)
 {
@@ -1149,12 +852,6 @@ BPGMuxerContext *bpg_muxer_open()
     return s;
 }
 
-static int my_write_func(void *opaque, const uint8_t *buf, int buf_len)
-{
-    FILE *f = opaque;
-    return fwrite(buf, 1, buf_len, f);
-}
-
 static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
     uint8_t *extension_buf;
     int extension_buf_len;
@@ -1242,10 +939,10 @@ static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
             put_ue(&q, extension_buf_len); /* extension data length */
         }
 
-        my_write_func(opaque, img_header, q - img_header);
+        fwrite(img_header, 1, q - img_header, opaque);
 
         if (has_extension) {
-            if (my_write_func(opaque, extension_buf, extension_buf_len) != extension_buf_len) {
+            if (fwrite(extension_buf, 1, extension_buf_len, opaque) != extension_buf_len) {
                 fprintf(stderr, "Error while writing extension data\n");
                 free(extension_buf);
                 return -1;
@@ -1257,7 +954,7 @@ static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
     return 0;
 }
 
-int bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char *hevc_name)
+static int bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char *hevc_name)
 {
     FILE *f;
     uint8_t *out_buf;
@@ -1295,7 +992,7 @@ int bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char *hevc_n
         fprintf(stderr, "Error preparing headers for %s\n", hevc_name);
         goto hevc_load_error;
     }
-    
+
     fclose(f);
     *pbuf = out_buf;
 
@@ -1310,7 +1007,7 @@ int bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char *hevc_n
     return -1;
 }
 
-int check_hevc_cfg(BPGMuxerContext *s)
+static int check_hevc_cfg(BPGMuxerContext *s)
 {
     const HEVCVideoConfig *color, *alpha;
     color = &s->color;
@@ -1358,19 +1055,16 @@ int check_hevc_cfg(BPGMuxerContext *s)
     return 0;
 }
 
-void bpg_muxer_close(BPGMuxerContext *s)
+static void bpg_muxer_close(BPGMuxerContext *s)
 {
     bpg_md_free(s->first_md);
-    //if (s->color) {
-        if (s->color.msps)
-            free(s->color.msps);
-    //    free(s->color);
-    //}
-    //if (s->alpha) {
-        if (s->alpha.msps)
-            free(s->alpha.msps);
-    //    free(s->alpha);
-    //}
+
+    if (s->color.msps)
+        free(s->color.msps);
+
+    if (s->alpha.msps)
+        free(s->alpha.msps);
+
     free(s->color_buf);
     free(s->alpha_buf);
 
@@ -1378,7 +1072,7 @@ void bpg_muxer_close(BPGMuxerContext *s)
     free(s);
 }
 
-void help(int is_full)
+static void mux_help(int is_full)
 {
     printf("BPG Muxer version " CONFIG_BPG_VERSION "\n"
            "usage: bpgmux [options] infile.[h265|hevc]\n"
@@ -1411,7 +1105,7 @@ void help(int is_full)
     exit(1);
 }
 
-struct option long_opts[] = {
+static struct option mux_adv_opts[] = {
     { "limitedrange", no_argument },
     { "premul", no_argument },
     { "loop", required_argument },
@@ -1441,7 +1135,7 @@ int main(int argc, char **argv)
     muxed_buf = NULL;
 
     for(;;) {
-        c = getopt_long_only(argc, argv, "a:o:c:h", long_opts, &option_index);
+        c = getopt_long_only(argc, argv, "a:o:c:h", mux_adv_opts, &option_index);
         if (c == -1)
             break;
         switch(c) {
@@ -1509,7 +1203,7 @@ int main(int argc, char **argv)
             break;
         case 'h':
         show_help:
-            help(1);
+            mux_help(1);
             break;
         default:
             exit(1);
@@ -1517,7 +1211,7 @@ int main(int argc, char **argv)
     }
 
     if (optind >= argc)
-        help(0);
+        mux_help(0);
     color_fname = argv[optind];
 
     f = fopen(muxed_fname, "wb");
@@ -1552,7 +1246,7 @@ int main(int argc, char **argv)
     s->first_md = md;
 
     /* start actual muxing process */
-    muxed_buf_len = build_modified_hevc(&muxed_buf, s, color_buf_len, alpha_buf_len, fdelay);
+    muxed_buf_len = bpg_muxer_build_hevc(&muxed_buf, s, color_buf_len, alpha_buf_len, fdelay);
     if (muxed_buf_len < 0) {
         fprintf(stderr, "Error while building modified hevc buffer\n");
         goto bpgmux_fail;
@@ -1565,11 +1259,11 @@ int main(int argc, char **argv)
         goto bpgmux_fail;
     }
 
-    if (my_write_func(f, muxed_buf, muxed_buf_len) != muxed_buf_len) {
+    if (fwrite(muxed_buf, 1, muxed_buf_len, f) != muxed_buf_len) {
         fprintf(stderr, "Error while writing HEVC data to disk\n");
         goto bpgmux_fail;
     }
-    
+
     fclose(f);
 
     bpg_muxer_close(s);

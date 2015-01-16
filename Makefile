@@ -167,13 +167,13 @@ bpgenc.o: CFLAGS+=-Wno-unused-but-set-variable
 libbpg.a: $(LIBBPG_OBJS)
 	$(AR) rcs $@ $^
 
-bpgmux$(EXE): bpgmux.o
+bpgmux$(EXE): bpgmux.o bpgfmt.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(BPGMUX_LIBS)
 
 bpgdec$(EXE): bpgdec.o libbpg.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(BPGDEC_LIBS)
 
-bpgenc$(EXE): $(BPGENC_OBJS)
+bpgenc$(EXE): $(BPGENC_OBJS) bpgfmt.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(BPGENC_LIBS)
 
 bpgview$(EXE): bpgview.o libbpg.a
