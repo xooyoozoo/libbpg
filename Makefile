@@ -137,7 +137,6 @@ else
 bpgenc.o: CFLAGS+=-DUSE_JCTVC=0
 endif # USE_JCTVC
 
-
 ifdef CONFIG_WIN32
 
 LDFLAGS+=-static
@@ -193,7 +192,7 @@ size:
 	size bpgdec libbpg.o libavcodec/*.o libavutil/*.o | sort -n
 	gzip < bpgdec | wc
 
-install: bpgenc bpgdec
+install: $(PROGS)
 	install -s -m 755 $^ $(prefix)/bin
 
 CLEAN_DIRS=doc html libavcodec libavutil \

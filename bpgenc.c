@@ -2588,7 +2588,7 @@ static struct option long_opts[] = {
     { NULL },
 };
 
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     const char *infilename, *outfilename, *frame_delay_file;
     Image *img;
