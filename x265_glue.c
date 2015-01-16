@@ -142,6 +142,8 @@ static HEVCEncoderContext *x265_open(const HEVCEncodeParams *params)
     p->rc.rfConstant = params->qp;
     p->rc.aqMode = X265_AQ_VARIANCE;
 
+    p->bEnableSAO = 1;
+
     p->bEnableWavefront = params->wpp;
     p->bLossless = params->lossless;
 

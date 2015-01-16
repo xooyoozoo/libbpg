@@ -1545,7 +1545,7 @@ static int find_nal_end(const uint8_t *buf, int buf_len)
 
 /* return the position of the end of the NAL or -1 if error */
 static int extract_nal(uint8_t **pnal_buf, int *pnal_len,
-                       const uint8_t *buf, int buf_len)
+                       const uint8_t *buf, const int buf_len)
 {
     int idx, start, end, len;
     uint8_t *nal_buf;
@@ -1753,7 +1753,7 @@ static inline int gol_to_signed(uint32_t ueg)
 }
 
 /* Obtain color planes's base QP to set JCTVC alpha QP */
-static int get_pic_base_qp(const uint8_t *buf, int buf_len)
+static int get_pic_base_qp(const uint8_t *buf, const int buf_len)
 {
     int nal_unit_type, nal_len, idx, i;
     int output_flag_present_flag, num_extra_slice_header_bits;
@@ -1839,7 +1839,7 @@ static int get_pic_base_qp(const uint8_t *buf, int buf_len)
 /* suppress the VPS NAL and keep only the useful part of the SPS
    header. The decoder can rebuild a valid HEVC stream if needed. */
 static int build_modified_sps(uint8_t **pout_buf, int *pout_buf_len,
-                              const uint8_t *buf, int buf_len)
+                              const uint8_t *buf, const int buf_len)
 {
     int nal_unit_type, nal_len, idx, i, ret, msps_buf_len;
     int out_buf_len, out_buf_len_max;
@@ -2009,10 +2009,13 @@ static int build_modified_sps(uint8_t **pout_buf, int *pout_buf_len,
             int vui_hrd_parameters_present_flag, bitstream_restriction_flag;
 
             sar_present = get_bits(gb, 1);
-            sar_idx = get_bits(gb, 8);
-            if (sar_idx == 255) {
-                skip_bits(gb, 16); /* sar_num */
-                skip_bits(gb, 16); /* sar_den */
+            if (sar_present) {
+                sar_idx = get_bits(gb, 8);
+                fprintf(stderr, "sar_idx %d\n", sar_idx);
+                if (sar_idx == 255) {
+                    skip_bits(gb, 16); /* sar_num */
+                    skip_bits(gb, 16); /* sar_den */
+                }
             }
 
             overscan_info_present_flag = get_bits(gb, 1);
@@ -2231,6 +2234,7 @@ static int build_modified_hevc(uint8_t **pout_buf,
             aidx += nal_len;
         }
         start = 3 + (nal_buf[2] == 0);
+        fprintf(stderr, "nut %d\n", (nal_buf[start] >> 1) & 0x3f);
         if (!is_alpha) {
             int nut;
             /* add SEI NAL for the frame duration (animation case) */

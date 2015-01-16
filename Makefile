@@ -65,7 +65,7 @@ endif
 CFLAGS+=-g
 CXXFLAGS=$(CFLAGS)
 
-PROGS=bpgdec$(EXE) bpgenc$(EXE)
+PROGS=bpgmux$(EXE) bpgdec$(EXE) bpgenc$(EXE)
 ifdef USE_BPGVIEW
 PROGS+=bpgview$(EXE)
 endif
@@ -141,6 +141,7 @@ endif # USE_JCTVC
 ifdef CONFIG_WIN32
 
 LDFLAGS+=-static
+BPGMUX_LIBS:=-Wl,-dy -Wl,-dn
 BPGDEC_LIBS:=-Wl,-dy -lpng16 -lz -Wl,-dn
 BPGENC_LIBS+=-Wl,-dy -lpng16 -ljpeg -lz -Wl,-dn
 BPGVIEW_LIBS:=-lmingw32 -lSDLmain -Wl,-dy -lSDL_image -lSDL -Wl,-dn -mwindows
@@ -154,6 +155,7 @@ LIBS:=-lrt
 endif # !CONFIG_APPLE
 LIBS+=-lm -lpthread
 
+BPGMUX_LIBS:=$(LIBS)
 BPGDEC_LIBS:=-lpng16 $(LIBS)
 BPGENC_LIBS+=-lpng16 -ljpeg $(LIBS)
 BPGVIEW_LIBS:=-lSDL_image -lSDL $(SDL_LIBS) $(LIBS)
@@ -164,6 +166,9 @@ bpgenc.o: CFLAGS+=-Wno-unused-but-set-variable
 
 libbpg.a: $(LIBBPG_OBJS)
 	$(AR) rcs $@ $^
+
+bpgmux$(EXE): bpgmux.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(BPGMUX_LIBS)
 
 bpgdec$(EXE): bpgdec.o libbpg.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(BPGDEC_LIBS)
