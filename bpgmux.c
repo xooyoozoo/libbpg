@@ -247,7 +247,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
     /* not all streams provide these, so create defaults */
     color_space = DEFAULT_COLORSPACE;
-    video_full_range_flag = 1;
+    video_full_range_flag = 0;
     fps_num = fps_den = 0;
 
     out_buf = NULL;
@@ -959,7 +959,7 @@ static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
         v = (format << 5) | (alpha1_flag << 4) | (s->color.bit_depth - 8);
         *q++ = v;
         v = (s->color_space << 4) | (has_extension << 3) |
-            (alpha2_flag << 2) | (s->color.limited_range << 1) |
+            (alpha2_flag << 2) | (s->limited_range << 1) |
             (s->frame_count > 1);//
         *q++ = v;
         put_ue(&q, s->color.width);
