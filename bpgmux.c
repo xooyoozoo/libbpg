@@ -214,7 +214,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
 
             /* log2_max_poc_lsb is defined as 8 in BPG */
             slice_pic_order_cnt_lsb = (uint8_t) get_bits(gb, 8);
-            if (slice_pic_order_cnt_lsb < prev_poc) {
+            if (slice_pic_order_cnt_lsb != 0 && slice_pic_order_cnt_lsb < prev_poc) {
                 fprintf(stderr, "input is not monotonically ordered (%d < %d)\n",
                                  slice_pic_order_cnt_lsb, prev_poc);
                 return -1;
@@ -234,19 +234,18 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
                 if (num_neg_pics > 1 || num_pos_pics > 0) {
                     fprintf(stderr, "too many neg (%d) or pos (%d) refs\n", num_neg_pics, num_pos_pics);
                     return -1;
-                }
-                if (slice_type == 0) {
+                } else if (slice_type == 0) {
                     fprintf(stderr, "warning: ref usage is within spec, but B-slice (2 MVs per block) in use\n");
                 }
 
                 if (num_neg_pics) {
-                    int delta_poc_s0_minus1;
+                    uint8_t delta_poc_s0_minus1;
 
-                    delta_poc_s0_minus1 = (int) get_ue_golomb(gb);
-                    if (delta_poc_s0_minus1 - slice_pic_order_cnt_lsb - prev_poc >= 0) {
-                        fprintf(stderr, "warning: ref frame (%d) extends beyond last POC (%d)\n",
-                                         slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1,
-                                         prev_poc);
+                    delta_poc_s0_minus1 = (uint8_t) get_ue_golomb(gb);
+                    if (delta_poc_s0_minus1 > 0) {
+                        fprintf(stderr, "referenced frame POC (%d) must be last immediate frame from %d\n",
+                                         slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1, delta_poc_s0_minus1);
+                        return -1;
                     }
                     skip_bits(gb, 1);   /* used_by_curr_pic_s0_flag */
                 }
@@ -949,7 +948,7 @@ static BPGMuxerContext *bpg_muxer_open()
 
 static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
     uint8_t *extension_buf;
-    int extension_buf_len;
+    uint32_t extension_buf_len;
 
     if (s->frame_count > 1) {
         BPGMetaData *md;
@@ -1346,7 +1345,7 @@ int main(int argc, char **argv)
         if (alpha_buf_len < 1)
             goto bpgmux_fail;
     }
-    /* make sure muxer_ctx settings and color and alpha agree */
+    /* make sure stored muxer settings and color and alpha agree */
     if (check_hevc_cfg(s) < 0)
         goto bpgmux_fail;
 
@@ -1390,6 +1389,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "Muxing has failed.\n");
     if (muxed_buf)
         free (muxed_buf);
+    if (f)
+        unlink(muxed_fname);
     bpg_muxer_close(s);
     exit(1);
 }
