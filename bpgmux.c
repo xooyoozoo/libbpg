@@ -137,6 +137,7 @@ static int extract_nal(uint8_t **pnal_buf, uint32_t *pnal_len,
     return idx;
 }
 
+/* check each visual frames to ensure BPG-valid parameters */
 static int parse_slice(const uint8_t *buf, const int len, const int nut,
                        const HEVCVideoConfig *cfg,
                        uint8_t *last_poc)
@@ -221,7 +222,8 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
             }
 
             if (get_bits(gb, 1) != short_term_ref_pic_set_sps_flag) {
-                fprintf(stderr, "short_term_ref_pic_set_sps_flag should be 0\n");
+                fprintf(stderr, "short_term_ref_pic_set_sps_flag should be %d\n",
+                                 short_term_ref_pic_set_sps_flag);
                 return -1;
             }
 
@@ -235,19 +237,22 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
                     fprintf(stderr, "too many neg (%d) or pos (%d) refs\n", num_neg_pics, num_pos_pics);
                     return -1;
                 } else if (slice_type == 0) {
-                    fprintf(stderr, "warning: ref usage is within spec, but B-slice (2 MVs per block) in use\n");
+                    fprintf(stderr, "b-slice (2 MVs per block) in use\n");
+                    return -1;
                 }
 
                 if (num_neg_pics) {
                     uint8_t delta_poc_s0_minus1;
+                    int refed;
 
                     delta_poc_s0_minus1 = (uint8_t) get_ue_golomb(gb);
-                    if (delta_poc_s0_minus1 > 0) {
-                        fprintf(stderr, "referenced frame POC (%d) must be last immediate frame from %d\n",
-                                         slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1, delta_poc_s0_minus1);
-                        return -1;
+                    refed  = slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1;
+                    refed += 256 * (refed < 0);
+                    if (delta_poc_s0_minus1 > 0 && refed != prev_poc) {
+                        if (get_bits(gb, 1))    /* used_by_curr_pic_s0_flag */
+                            fprintf(stderr, "warning: ref frame (%d) is not the immediate previous (%d)\n",
+                                             refed, prev_poc);
                     }
-                    skip_bits(gb, 1);   /* used_by_curr_pic_s0_flag */
                 }
             }
         } else {
@@ -380,6 +385,12 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
         width = get_ue_golomb(gb);
         height = get_ue_golomb(gb);
+        if ((width % 8) + (width % 8) != 0) {
+            fprintf(stderr, "conformance dims (%d x %d) expected to be multiple of at least 8\n",
+                             width, height);
+            goto bad_header_info;
+        }
+
         /* pic conformance_flag */
         if (get_bits(gb, 1)) {
             uint8_t h_scale, v_scale;
@@ -507,7 +518,8 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
                     primaries = get_bits(gb, 8);
                     transfer = get_bits(gb, 8); /* transfer_characteristics */
-                    matrix = get_bits(gb, 8); /* matrix_coeffs */
+                    matrix = get_bits(gb, 8);   /* matrix_coeffs */
+
                     if (primaries == 1 || primaries == 2) {
                         color_space = BPG_CS_YCbCr_BT709;
                     } else if (primaries >= 5 && primaries <= 7) {
@@ -1102,7 +1114,7 @@ static uint32_t bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const 
 }
 
 /* transform fps double to valid 16bit pair of delay numbers */
-static void process_fps_range(double fnum, uint16_t *delay_num, uint16_t *delay_den) {
+static void fps_dbl_to_delay(double fnum, uint16_t *delay_num, uint16_t *delay_den) {
     uint16_t fden = 1;
 
     for (;;) {
@@ -1110,8 +1122,8 @@ static void process_fps_range(double fnum, uint16_t *delay_num, uint16_t *delay_
             break;
         if (fabs(round(fnum) - fnum) < 0.0001)
             break;
-        fden <<= 1;
-        fnum  *= 2;
+        fnum *= 2;
+        fden *= 2;
     }
 
     *delay_num = fden;
@@ -1135,8 +1147,8 @@ static int check_hevc_cfg(BPGMuxerContext *s)
                 s->frame_delay_num = (uint16_t) color->fps_den;
                 s->frame_delay_den = (uint16_t) color->fps_num;
             } else {
-                process_fps_range((color->fps_num / (double) color->fps_den),
-                                &s->frame_delay_num, &s->frame_delay_den);
+                fps_dbl_to_delay((color->fps_num / (double) color->fps_den),
+                                 &s->frame_delay_num, &s->frame_delay_den);
             }
         } else {
             s->frame_delay_num = 1;
@@ -1158,6 +1170,11 @@ static int check_hevc_cfg(BPGMuxerContext *s)
         }
         if (alpha->pixel_format != BPG_FORMAT_GRAY) {
             fprintf(stderr, "alpha plane must be monochrome\n");
+            return -1;
+        }
+    } else {
+        if (s->premultiplied_alpha || s->cmyk) {
+            fprintf(stderr, "premul or cmyk format indicated, but there's no alpha plane\n");
             return -1;
         }
     }
@@ -1274,7 +1291,7 @@ int main(int argc, char **argv)
                 if (2 != sscanf(optarg, "%hu/%hu", &s->frame_delay_den, &s->frame_delay_num)) {
                     double fps = atof(optarg);
                     if (fps > 0) {
-                        process_fps_range(fps, &s->frame_delay_num, &s->frame_delay_den);
+                        fps_dbl_to_delay(fps, &s->frame_delay_num, &s->frame_delay_den);
                     }
                 }
                 if (s->frame_delay_den < 1 || s->frame_delay_num < 1) {
