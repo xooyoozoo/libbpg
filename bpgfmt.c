@@ -74,43 +74,6 @@ int find_nal_end(const uint8_t *buf, int buf_len)
     return idx;
 }
 
-/* return the position of the end of the NAL or -1 if error */
-int extract_nal(uint8_t **pnal_buf, int *pnal_len,
-                       const uint8_t *buf, const int buf_len)
-{
-    int idx, start, end, len;
-    uint8_t *nal_buf;
-    int nal_len;
-
-    end = find_nal_end(buf, buf_len);
-    if (end < 0)
-        return -1;
-    if (buf[2] == 1)
-        start = 3;
-    else
-        start = 4;
-    len = end - start;
-
-    nal_buf = malloc(len);
-    nal_len = 0;
-    idx = start;
-    while (idx < end) {
-        if (idx + 2 < end && buf[idx] == 0 && buf[idx + 1] == 0 && buf[idx + 2] == 3) {
-            nal_buf[nal_len++] = 0;
-            nal_buf[nal_len++] = 0;
-            idx += 3;
-        } else {
-            nal_buf[nal_len++] = buf[idx++];
-        }
-    }
-    while (idx < end) {
-        nal_buf[nal_len++] = buf[idx++];
-    }
-    *pnal_buf = nal_buf;
-    *pnal_len = nal_len;
-    return idx;
-}
-
 BPGMetaData *bpg_md_alloc(uint32_t tag)
 {
     BPGMetaData *md;

@@ -54,23 +54,23 @@ typedef enum {
 } HEVCParallelismEnum;
 
 typedef struct HEVCVideoConfig {
-    int width;
-    int height;
-    int min_cb_size;
-    int fps_num;
-    int fps_den;
+    uint32_t width;
+    uint32_t height;
+    uint32_t min_cb_size;
+    uint32_t fps_num;
+    uint32_t fps_den;
 
-    int bit_depth;
-    int limited_range;
+    uint8_t bit_depth;
+    uint8_t limited_range;
     BPGImageFormatEnum pixel_format;
     BPGColorSpaceEnum color_space;
 
     HEVCParallelismEnum parallel;
-    int dependent_slices;
+    uint8_t dependent_slices;
 
     uint8_t *msps;
-    int msps_len;
-    int pps_idx;
+    uint32_t msps_len;
+    uint32_t pps_idx;
 } HEVCVideoConfig;
 
 typedef struct BPGMuxerContext {
@@ -87,23 +87,60 @@ typedef struct BPGMuxerContext {
     uint16_t frame_delay_num;
     uint16_t frame_delay_den;
 
-    int frame_count;
-    int frame_ticks;
+    uint16_t frame_count;
+    uint16_t frame_ticks;
     uint16_t *frame_duration_tab;
-    int frame_duration_tab_size;
+    uint16_t frame_duration_tab_size;
 
     BPGColorSpaceEnum color_space;
-    int limited_range;
-    int premultiplied_alpha;
-    int cmyk;
+    uint8_t limited_range;
+    uint8_t premultiplied_alpha;
+    uint8_t cmyk;
 } BPGMuxerContext;
+
+/* return the position of the end of the NAL or -1 if error */
+static int extract_nal(uint8_t **pnal_buf, uint32_t *pnal_len,
+                       const uint8_t *buf, const int buf_len)
+{
+    int idx, start, end, len;
+    uint8_t *nal_buf;
+    uint32_t nal_len;
+
+    end = find_nal_end(buf, buf_len);
+    if (end < 0)
+        return -1;
+    if (buf[2] == 1)
+        start = 3;
+    else
+        start = 4;
+    len = end - start;
+
+    nal_buf = malloc(len);
+    nal_len = 0;
+    idx = start;
+    while (idx < end) {
+        if (idx + 2 < end && buf[idx] == 0 && buf[idx + 1] == 0 && buf[idx + 2] == 3) {
+            nal_buf[nal_len++] = 0;
+            nal_buf[nal_len++] = 0;
+            idx += 3;
+        } else {
+            nal_buf[nal_len++] = buf[idx++];
+        }
+    }
+    while (idx < end) {
+        nal_buf[nal_len++] = buf[idx++];
+    }
+    *pnal_buf = nal_buf;
+    *pnal_len = nal_len;
+    return idx;
+}
 
 static int parse_slice(const uint8_t *buf, const int len, const int nut,
                        const HEVCVideoConfig *cfg,
-                       int *last_poc)
+                       uint8_t *last_poc)
 {
-    int is_IRAP, first_slice_segment_in_pic;
-    int slice_pic_order_cnt_lsb;
+    uint8_t is_IRAP, first_slice_segment_in_pic;
+    uint8_t slice_pic_order_cnt_lsb;
     GetBitState gb_s, *gb = &gb_s;
 
     if (nut <= TRAIL_R && (buf[2] & 0x80)) {
@@ -120,7 +157,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
     init_get_bits(gb, buf, len);
     skip_bits(gb, 16);  // nal header
 
-    first_slice_segment_in_pic = get_bits(gb, 1);
+    first_slice_segment_in_pic = (uint8_t) get_bits(gb, 1);
     if (is_IRAP) {
         skip_bits(gb, 1);   /* no_output_of_prior_pics_flag */
     }
@@ -130,8 +167,8 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
     }
 
     if (!first_slice_segment_in_pic) {
-        int slice_segment_addr_len;
-        int w1, h1;
+        uint32_t slice_segment_addr_len;
+        uint32_t w1, h1;
 
         if (cfg->dependent_slices)
             if (get_bits(gb, 1))
@@ -142,12 +179,12 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
         h1 = (cfg->height + cfg->min_cb_size - 1) & ~(cfg->min_cb_size - 1);
         slice_segment_addr_len = lrint(ceil(log(w1 * h1) / log(2)));
 
-        skip_bits(gb, slice_segment_addr_len); /* slice_segment_address */
+        gb->idx += slice_segment_addr_len;  /* slice_segment_address */
     }
 
-    slice_pic_order_cnt_lsb = -1;
+    slice_pic_order_cnt_lsb = *last_poc;
     if (!cfg->dependent_slices) {
-        int i, slice_type;
+        uint32_t i, slice_type;
 
         const int num_extra_slice_header_bits = 0;
         for (i = 0; i < num_extra_slice_header_bits; i++)
@@ -170,12 +207,12 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
         // [...] not separate colour plane
 
         if (nut != IDR_W_RADL && nut != IDR_N_LP) {
-            const int short_term_ref_pic_set_sps_flag = 0;
-            const int prev_poc = *last_poc;
+            const uint32_t short_term_ref_pic_set_sps_flag = 0;
+            const uint8_t prev_poc = *last_poc;
 
             /* log2_max_poc_lsb is defined as 8 in BPG */
-            slice_pic_order_cnt_lsb = get_bits(gb, 8);
-            if (slice_pic_order_cnt_lsb > 0 && slice_pic_order_cnt_lsb < prev_poc) {
+            slice_pic_order_cnt_lsb = (uint8_t) get_bits(gb, 8);
+            if (slice_pic_order_cnt_lsb < prev_poc) {
                 fprintf(stderr, "input is not monotonically ordered (%d < %d)\n",
                                  slice_pic_order_cnt_lsb, prev_poc);
                 return -1;
@@ -187,7 +224,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
             }
 
             if (!short_term_ref_pic_set_sps_flag) {
-                int num_neg_pics, num_pos_pics;
+                uint32_t num_neg_pics, num_pos_pics;
 
                 num_neg_pics = get_ue_golomb(gb);
                 num_pos_pics = get_ue_golomb(gb);
@@ -202,9 +239,9 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
 
                 if (num_neg_pics) {
                     int delta_poc_s0_minus1;
-                    delta_poc_s0_minus1 = get_ue_golomb(gb);
-                    if (delta_poc_s0_minus1 != 0 &&
-                        delta_poc_s0_minus1 >= (slice_pic_order_cnt_lsb - prev_poc)) {
+
+                    delta_poc_s0_minus1 = (int) get_ue_golomb(gb);
+                    if (delta_poc_s0_minus1 - slice_pic_order_cnt_lsb - prev_poc >= 0) {
                         fprintf(stderr, "warning: ref frame (%d) extends beyond last POC (%d)\n",
                                          slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1,
                                          prev_poc);
@@ -218,8 +255,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
         }
     }
 
-    if (slice_pic_order_cnt_lsb >= 0)
-        *last_poc = slice_pic_order_cnt_lsb;
+    *last_poc = slice_pic_order_cnt_lsb;
 
     return 0;
 }
@@ -228,22 +264,21 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
    header. The decoder can rebuild a valid HEVC stream if needed. */
 /* also read and store per-stream encode details */
 static int prepare_headers(HEVCVideoConfig *plane,
-                           const uint8_t *buf, const int buf_len)
+                           const uint8_t *buf, const uint32_t buf_len)
 {
-    int nal_unit_type, nal_len, idx, i, ret, msps_buf_len;
-    int out_buf_len, out_buf_len_max;
-    uint8_t *nal_buf, *msps_buf, *out_buf;
+    int idx, ret;
+    uint32_t nal_len, msps_buf_len, out_buf_len, out_buf_len_max;
+    uint8_t i, nut;
+    uint8_t *nal_buf, *msps_buf, *out_buf, *p;
     GetBitState gb_s, *gb = &gb_s;
     PutBitState pb_s, *pb = &pb_s;
-    uint8_t *p;
 
     /* these will be directly used to find video cfg settings */
-    int width, height, min_cb_size, bit_depth;
-    int video_full_range_flag;
-    int color_space, pixel_format;
-    int fps_num, fps_den;
-    int tiles, wpp, dependent_slices;
-    int pps_idx;
+    uint32_t width, height, bit_depth, fps_num, fps_den;
+    uint32_t min_cb_size, pps_idx;
+    uint32_t video_full_range_flag, tiles, wpp, dependent_slices;
+    BPGColorSpaceEnum color_space;
+    BPGImageFormatEnum pixel_format;
 
     /* not all streams provide these, so create defaults */
     color_space = DEFAULT_COLORSPACE;
@@ -265,33 +300,33 @@ static int prepare_headers(HEVCVideoConfig *plane,
     else
         idx += ret;
     pps_idx = idx;
-    nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
-    if (nal_unit_type != 33) {
-        fprintf(stderr, "expecting SPS nal, got (%d)\n", nal_unit_type);
+    nut = (nal_buf[0] >> 1) & 0x3f;
+    if (nut != 33) {
+        fprintf(stderr, "expecting SPS nal, got (%d)\n", nut);
         goto bad_header_info;
     }
 
     /* skip the initial part of the SPS up to and including
        log2_min_cb_size */
     {
-        int vps_id, max_sub_layers, profile_idc, sps_id;
-        int chroma_format_idc, bit_depth_luma, bit_depth_chroma;
-        int log2_max_poc_lsb, sublayer_ordering_info, log2_min_cb_size;
-        int log2_diff_max_min_coding_block_size, log2_min_tb_size;
-        int log2_diff_max_min_transform_block_size;
-        int max_transform_hierarchy_depth_inter;
-        int max_transform_hierarchy_depth_intra;
-        int scaling_list_enable_flag, amp_enabled_flag, sao_enabled;
-        int pcm_enabled_flag, nb_st_rps;
-        int long_term_ref_pics_present_flag, sps_strong_intra_smoothing_enable_flag, vui_present;
-        int sps_temporal_mvp_enabled_flag;
-        int pcm_sample_bit_depth_luma_minus1;
-        int pcm_sample_bit_depth_chroma_minus1;
-        int log2_min_pcm_luma_coding_block_size_minus3;
-        int log2_diff_max_min_pcm_luma_coding_block_size;
-        int pcm_loop_filter_disabled_flag;
-        int sps_extension_flag, sps_range_extension_flag, sps_extension_7bits;
-        int sps_range_extension_flags;
+        uint32_t vps_id, max_sub_layers, profile_idc, sps_id;
+        uint32_t chroma_format_idc, bit_depth_luma, bit_depth_chroma;
+        uint32_t log2_max_poc_lsb, sublayer_ordering_info, log2_min_cb_size;
+        uint32_t log2_diff_max_min_coding_block_size, log2_min_tb_size;
+        uint32_t log2_diff_max_min_transform_block_size;
+        uint32_t max_transform_hierarchy_depth_inter;
+        uint32_t max_transform_hierarchy_depth_intra;
+        uint32_t scaling_list_enable_flag, amp_enabled_flag, sao_enabled;
+        uint32_t pcm_enabled_flag, nb_st_rps;
+        uint32_t long_term_ref_pics_present_flag, sps_strong_intra_smoothing_enable_flag, vui_present;
+        uint32_t sps_temporal_mvp_enabled_flag;
+        uint32_t pcm_sample_bit_depth_luma_minus1;
+        uint32_t pcm_sample_bit_depth_chroma_minus1;
+        uint32_t log2_min_pcm_luma_coding_block_size_minus3;
+        uint32_t log2_diff_max_min_pcm_luma_coding_block_size;
+        uint32_t pcm_loop_filter_disabled_flag;
+        uint32_t sps_extension_flag, sps_range_extension_flag, sps_extension_7bits;
+        uint32_t sps_range_extension_flags;
 
         init_get_bits(gb, nal_buf, nal_len);
         skip_bits(gb, 16); /* nal header */
@@ -336,15 +371,17 @@ static int prepare_headers(HEVCVideoConfig *plane,
         else if (chroma_format_idc == 3) {
             pixel_format = BPG_FORMAT_444;
             /* separate_colour_plane_flag */
-            if (get_bits(gb, 1) != 0)
+            if (get_bits(gb, 1) != 0) {
                 fprintf(stderr, "separate_colour_plane_flag should be 0\n");
+                goto bad_header_info;
+            }
         }
 
         width = get_ue_golomb(gb);
         height = get_ue_golomb(gb);
         /* pic conformance_flag */
         if (get_bits(gb, 1)) {
-            int h_scale, v_scale;
+            uint8_t h_scale, v_scale;
             /* pads of subsampled dimensions were right shifted. undo. */
             h_scale = (chroma_format_idc  % 3) ? 2 : 1;
             v_scale = (chroma_format_idc == 1) ? 2 : 1;
@@ -355,6 +392,11 @@ static int prepare_headers(HEVCVideoConfig *plane,
             height -= get_ue_golomb(gb) * v_scale; /* top_offset */
             height -= get_ue_golomb(gb) * v_scale; /* bottom_offset */
         }
+        if (width < 8 || height < 8) {
+            fprintf(stderr, "unsupported width (%d) or height (%d)\n", width, height);
+            goto bad_header_info;
+        }
+
         bit_depth_luma = bit_depth = get_ue_golomb(gb) + 8;
         bit_depth_chroma = get_ue_golomb(gb) + 8;
         if (bit_depth_luma != bit_depth_chroma) {
@@ -431,12 +473,12 @@ static int prepare_headers(HEVCVideoConfig *plane,
         sps_strong_intra_smoothing_enable_flag = get_bits(gb, 1);
         vui_present = get_bits(gb, 1);
         if (vui_present) {
-            int sar_present, sar_idx, overscan_info_present_flag;
-            int video_signal_type_present_flag, chroma_loc_info_present_flag;
-            int default_display_window_flag, vui_timing_info_present_flag;
-            int vui_poc_proportional_to_timing_flag;
-            int vui_hrd_parameters_present_flag, bitstream_restriction_flag;
-            int colour_description_present_flag;
+            uint32_t sar_present, sar_idx, overscan_info_present_flag;
+            uint32_t video_signal_type_present_flag, chroma_loc_info_present_flag;
+            uint32_t default_display_window_flag, vui_timing_info_present_flag;
+            uint32_t vui_poc_proportional_to_timing_flag;
+            uint32_t vui_hrd_parameters_present_flag, bitstream_restriction_flag;
+            uint32_t colour_description_present_flag;
 
             sar_present = get_bits(gb, 1);
             if (sar_present) {
@@ -460,7 +502,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
                 colour_description_present_flag = get_bits(gb, 1);
                 if (colour_description_present_flag) {
-                    int primaries, transfer, matrix;
+                    uint32_t primaries, transfer, matrix;
 
                     primaries = get_bits(gb, 8);
                     transfer = get_bits(gb, 8); /* transfer_characteristics */
@@ -499,7 +541,8 @@ static int prepare_headers(HEVCVideoConfig *plane,
             }
             chroma_loc_info_present_flag = get_bits(gb, 1);
             if (chroma_loc_info_present_flag) {
-                int loc_top, loc_bot;
+                uint32_t loc_top, loc_bot;
+
                 loc_top = get_ue_golomb(gb);
                 loc_bot = get_ue_golomb(gb);
                 if (chroma_format_idc == 1 && (loc_top == loc_bot)
@@ -613,20 +656,20 @@ static int prepare_headers(HEVCVideoConfig *plane,
     ret = extract_nal(&nal_buf, &nal_len, buf + idx, buf_len);
     if (ret < 0)
         goto bad_header_info;
-    nal_unit_type = (nal_buf[0] >> 1) & 0x3f;
-    if (nal_unit_type != 34) {
-        fprintf(stderr, "expecting PPS nal, got (%d)\n", nal_unit_type);
+    nut = (nal_buf[0] >> 1) & 0x3f;
+    if (nut != 34) {
+        fprintf(stderr, "expecting PPS nal, got (%d)\n", nut);
         goto bad_header_info;
     }
     {
-        int cu_qp_delta;
-
         init_get_bits(gb, nal_buf, nal_len);
         skip_bits(gb, 16);  // nal header
 
         get_ue_golomb(gb);  /* pps_pic_parameter_set_id */
         get_ue_golomb(gb);  /* pps_seq_parameter_set_id */
+
         dependent_slices = get_bits(gb, 1);
+
         if (get_bits(gb, 1) != 0) {
             fprintf(stderr, "output_flag_present_flag currently expected to equal 0\n");
             goto bad_header_info;
@@ -643,8 +686,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
         skip_bits(gb, 1);   /* constrained_intra_pred_flag */
         skip_bits(gb, 1);   /* transform_skip_enabled_flag */
 
-        cu_qp_delta = get_bits(gb, 1);
-        if (cu_qp_delta)
+        if (get_bits(gb, 1))    /* cu_qp_delta_enabled_flag */
             get_ue_golomb(gb);  /* diff_cu_qp_delta_depth */
 
         get_ue_golomb(gb);  /* pps_cb_qp_offset */
@@ -665,8 +707,16 @@ static int prepare_headers(HEVCVideoConfig *plane,
     free(nal_buf);
     nal_buf = NULL;
 
+    /* save plane's configuration and header information */
     {
         HEVCVideoConfig *v;
+
+        if (out_buf_len < 1 || idx < 1) {
+            fprintf(stderr, "unexpected header size (%d) or location (%d) \n",
+                             out_buf_len, idx);
+            goto bad_header_info;
+        }
+
         v = mallocz(sizeof(HEVCVideoConfig));
         if (!v)
             goto bad_header_info;
@@ -678,13 +728,13 @@ static int prepare_headers(HEVCVideoConfig *plane,
         v->fps_num = fps_num;
         v->fps_den = fps_den;
 
-        v->bit_depth = bit_depth;
-        v->limited_range = !video_full_range_flag;
+        v->bit_depth = (uint8_t) bit_depth;
+        v->limited_range = (uint8_t) !video_full_range_flag;
         v->pixel_format = pixel_format;
         v->color_space = color_space;
 
-        v->parallel = tiles | (wpp << 1);
-        v->dependent_slices = dependent_slices;
+        v->parallel = (wpp << 1) | tiles;
+        v->dependent_slices = (uint8_t) dependent_slices;
 
         /* store actual modified sps */
         v->msps = out_buf;
@@ -706,8 +756,9 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
 }
 
-static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
-                               int cbuf_len, int abuf_len,
+static uint32_t bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
+                               const uint32_t cbuf_len,
+                               const uint32_t abuf_len,
                                FILE *fdelay)
 {
     DynBuf out_buf_s, *out_buf = &out_buf_s;
@@ -715,19 +766,22 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     const uint8_t *abuf = s->alpha_buf;
     const uint8_t *nal_buf;
 
-    int msps_len, cidx, aidx, is_alpha, nal_len, first_nal, start, l;
-    int nut;
+    int nal_len;
+    uint32_t msps_len, cidx, aidx;
+    uint8_t nut, last_poc, is_alpha, first_nal, start, l;
 
-    /* used to keep track of poc order and make sure there's no reordering */
-    int last_poc = 0;
+    cidx = aidx = last_poc = 0;
 
     dyn_buf_init(out_buf);
 
     /* add alpha MSPS */
-    aidx = 0; /* avoids warning */
     if (abuf) {
         aidx = s->alpha.pps_idx;
         msps_len = s->alpha.msps_len;
+        if (cidx < 16 || msps_len < 2) {
+            fprintf(stderr, "alpha sps size unexpectedly small %d %d\n", aidx, msps_len);
+            goto fail;
+        }
         memcpy(out_buf->buf + out_buf->len, s->alpha.msps, msps_len);
         out_buf->len += msps_len;
         free(s->alpha.msps);
@@ -737,8 +791,10 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     /* add color MSPS */
     cidx = s->color.pps_idx;
     msps_len = s->color.msps_len;
-    if (cidx < 0)
+    if (cidx < 16 || msps_len < 2) {
+        fprintf(stderr, "color sps size unexpectedly small %d %d\n", cidx, msps_len);
         goto fail;
+    }
     if (dyn_buf_resize(out_buf, out_buf->len + msps_len) < 0)
         goto fail;
     memcpy(out_buf->buf + out_buf->len, s->color.msps, msps_len);
@@ -751,6 +807,10 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     is_alpha = (abuf != NULL);
     first_nal = 1;
     for(;;) {
+        if (s->frame_count >= USHRT_MAX) {
+            fprintf(stderr, "ending mux process. frame count has hit limit\n");
+            break;
+        }
         if (!is_alpha) {
             if (cidx >= cbuf_len) {
                 if (abuf) {
@@ -788,26 +848,27 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
 
         /* store animation data for displayed frames */
         if (!is_alpha && nut <= RSV_IRAP) {
-            int frame_ticks;
-
             /* if delay file exists, use delay timings from there for each new frame */
             if (fdelay) {
-                float fdelay_val;
-                if (fscanf(fdelay, "%f", &fdelay_val) == 1) {
-                    frame_ticks = lrint(fdelay_val * s->frame_delay_den / (s->frame_delay_num * 100));
-                    if (frame_ticks < 1)
-                        frame_ticks = 1;
-                    if (frame_ticks >= 1 && frame_ticks <= 65535)
-                        s->frame_ticks = frame_ticks;
+                double fdelay_val, ticks;
+                if (fscanf(fdelay, "%lf", &fdelay_val) == 1) {
+                    ticks = lrint(fdelay_val * s->frame_delay_den / (s->frame_delay_num * 100));
+                    if (ticks >= 1 && ticks <= USHRT_MAX)
+                        s->frame_ticks = (uint16_t)ticks;
+                    else if (ticks > USHRT_MAX)
+                        s->frame_ticks = USHRT_MAX;
                 }
             }
-            frame_ticks = s->frame_ticks;
 
+            uint16_t frame_ticks = s->frame_ticks;
             /* store the frame duration */
             if ((s->frame_count + 1) > s->frame_duration_tab_size) {
-                int tab_sz = s->frame_duration_tab_size;
+                uint16_t tab_sz = s->frame_duration_tab_size;
 
-                tab_sz = (tab_sz * 3) / 2;
+                if (tab_sz > SHRT_MAX)
+                    tab_sz = USHRT_MAX;
+                else
+                    tab_sz = (tab_sz * 3) / 2;
 
                 if (tab_sz < (s->frame_count + 1))
                     tab_sz = (s->frame_count + 1);
@@ -854,10 +915,10 @@ static int bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
         free(s->frame_duration_tab);
         s->frame_duration_tab = NULL;
     }
-    return -1;
+    return 0;
 }
 
-BPGMuxerContext *bpg_muxer_open()
+static BPGMuxerContext *bpg_muxer_open()
 {
     BPGMuxerContext *s;
 
@@ -877,7 +938,7 @@ BPGMuxerContext *bpg_muxer_open()
     s->frame_duration_tab_size = 0;
 
     s->color_space = BPG_CS_COUNT;
-    s->limited_range = -1;
+    s->limited_range = 255;
     s->premultiplied_alpha = 0;
     s->cmyk = 0;
     return s;
@@ -907,7 +968,7 @@ static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
     extension_buf_len = 0;
     if (s->first_md) {
         BPGMetaData *md1;
-        int max_len;
+        uint32_t max_len;
         uint8_t *q;
 
         max_len = 0;
@@ -930,9 +991,9 @@ static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
 
     {
         uint8_t img_header[128], *q;
-        int v, has_alpha, has_extension, alpha2_flag, alpha1_flag, format;
+        uint8_t v, has_alpha, has_extension, alpha2_flag, alpha1_flag, format;
 
-        has_alpha = (s->alpha_buf != NULL);
+        has_alpha = (s->alpha_buf != NULL && s->alpha.msps_len > 0);
         has_extension = (extension_buf_len > 0);
 
         if (has_alpha) {
@@ -985,11 +1046,11 @@ static int bpg_muxer_finish_ext(BPGMuxerContext *s, void *opaque) {
     return 0;
 }
 
-static int bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char *hevc_name)
+static uint32_t bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char *hevc_name)
 {
     FILE *f;
     uint8_t *out_buf;
-    int out_buf_len;
+    uint32_t out_buf_len;
 
     out_buf = NULL;
 
@@ -1035,7 +1096,24 @@ static int bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const char 
         free(out_buf);
         out_buf = NULL;
     }
-    return -1;
+    return 0;
+}
+
+/* transform fps double to valid 16bit pair of delay numbers */
+static void process_fps_range(double fnum, uint16_t *delay_num, uint16_t *delay_den) {
+    uint16_t fden = 1;
+
+    for (;;) {
+        if (fnum > SHRT_MAX || fden > SHRT_MAX)
+            break;
+        if (fabs(round(fnum) - fnum) < 0.0001)
+            break;
+        fden <<= 1;
+        fnum  *= 2;
+    }
+
+    *delay_num = fden;
+    *delay_den = (uint16_t) lrint(fnum);
 }
 
 static int check_hevc_cfg(BPGMuxerContext *s)
@@ -1044,18 +1122,20 @@ static int check_hevc_cfg(BPGMuxerContext *s)
     color = &s->color;
     alpha = &s->alpha;
 
-    if (s->limited_range < 0) {
+    if (s->limited_range != 0 && s->limited_range != 1) {
         s->limited_range = color->limited_range;
     }
 
-    if (s->frame_delay_num <= 0 || s->frame_delay_den <= 0) {
-        if (color->fps_num && color->fps_den
-            && color->fps_num <= USHRT_MAX
-            && color->fps_den <= USHRT_MAX)
-        {
-            /* delay is 1/fps */
-            s->frame_delay_num = color->fps_den;
-            s->frame_delay_den = color->fps_num;
+    if (s->frame_delay_num < 1 || s->frame_delay_den < 1) {
+        if (color->fps_num && color->fps_den) {
+            if (color->fps_num <= USHRT_MAX && color->fps_den <= USHRT_MAX) {
+                /* delay is 1/fps */
+                s->frame_delay_num = (uint16_t) color->fps_den;
+                s->frame_delay_den = (uint16_t) color->fps_num;
+            } else {
+                process_fps_range((color->fps_num / (double) color->fps_den),
+                                &s->frame_delay_num, &s->frame_delay_den);
+            }
         } else {
             s->frame_delay_num = 1;
             s->frame_delay_den = 25;
@@ -1103,6 +1183,7 @@ static void bpg_muxer_close(BPGMuxerContext *s)
     free(s);
 }
 
+static void mux_help() __attribute__ ((noreturn));
 static void mux_help(int is_full)
 {
     printf("BPG Muxer version " CONFIG_BPG_VERSION "\n"
@@ -1138,7 +1219,7 @@ static void mux_help(int is_full)
 }
 
 static struct option mux_adv_opts[] = {
-    { "limitedrange", no_argument },
+    { "limitedrange", required_argument },
     { "premul", no_argument },
     { "loop", required_argument },
     { "fps", required_argument },
@@ -1154,8 +1235,8 @@ int main(int argc, char **argv)
     uint8_t *muxed_buf;
 
     int c, option_index;
-    int color_buf_len, alpha_buf_len;
-    int muxed_buf_len;
+    uint32_t color_buf_len, alpha_buf_len;
+    uint32_t muxed_buf_len;
 
     BPGMuxerContext *s;
     s = bpg_muxer_open();
@@ -1165,6 +1246,8 @@ int main(int argc, char **argv)
     alpha_fname = NULL;
     md = NULL;
     muxed_buf = NULL;
+
+    color_buf_len = alpha_buf_len = 0;
 
     for(;;) {
         c = getopt_long_only(argc, argv, "a:o:c:h", mux_adv_opts, &option_index);
@@ -1180,26 +1263,16 @@ int main(int argc, char **argv)
                 s->premultiplied_alpha = 1;
                 break;
             case 2:
-                s->loop_count = strtoul(optarg, NULL, 0);
+                sscanf(optarg, "%hu", &s->loop_count);
                 break;
             case 3:
                 if (2 != sscanf(optarg, "%hu/%hu", &s->frame_delay_den, &s->frame_delay_num)) {
                     double fps = atof(optarg);
-                    if (fps > 0 && fps <= USHRT_MAX/1000) {
-                        s->frame_delay_num = 1000;
-                        s->frame_delay_den = lrint(fps * 1000.0);
-                    } else if (fps > 0 && fps <= USHRT_MAX/100) {
-                        s->frame_delay_num = 100;
-                        s->frame_delay_den = lrint(fps * 100.0);
-                    } else if (fps > 0 && fps <= USHRT_MAX/10) {
-                        s->frame_delay_num = 10;
-                        s->frame_delay_den = lrint(fps * 10.0);
-                    } else {
-                        s->frame_delay_num = 1;
-                        s->frame_delay_den = strtoul(optarg, NULL, 0);
+                    if (fps > 0) {
+                        process_fps_range(fps, &s->frame_delay_num, &s->frame_delay_den);
                     }
                 }
-                if (s->frame_delay_den == 0) {
+                if (s->frame_delay_den < 1 || s->frame_delay_num < 1) {
                     fprintf(stderr, "invalid frame rate\n");
                     exit(1);
                 }
@@ -1234,7 +1307,7 @@ int main(int argc, char **argv)
             }
             break;
         case 'h':
-        show_help:
+          show_help:
             mux_help(1);
             break;
         default:
@@ -1254,11 +1327,11 @@ int main(int argc, char **argv)
 
     /* load input bitstreams into memory. also check per-bistream conformity */
     color_buf_len = bpg_muxer_load_hevc(&s->color_buf, &s->color, color_fname);
-    if (color_buf_len < 0)
+    if (color_buf_len < 1)
         goto bpgmux_fail;
     if (alpha_fname) {
         alpha_buf_len = bpg_muxer_load_hevc(&s->alpha_buf, &s->alpha, alpha_fname);
-        if (alpha_buf_len < 0)
+        if (alpha_buf_len < 1)
             goto bpgmux_fail;
     }
     /* make sure muxer_ctx settings and color and alpha agree */
@@ -1279,7 +1352,7 @@ int main(int argc, char **argv)
 
     /* start actual muxing process */
     muxed_buf_len = bpg_muxer_build_hevc(&muxed_buf, s, color_buf_len, alpha_buf_len, fdelay);
-    if (muxed_buf_len < 0) {
+    if (muxed_buf_len < 1) {
         fprintf(stderr, "Error while building modified hevc buffer\n");
         goto bpgmux_fail;
     }

@@ -30,8 +30,6 @@ extern "C" {
 extern void *mallocz(size_t size);
 
 extern int find_nal_end(const uint8_t *buf, int buf_len);
-extern int extract_nal(uint8_t **pnal_buf, int *pnal_len,
-                       const uint8_t *buf, const int buf_len);
 
 typedef struct BPGMetaData {
     uint32_t tag;
