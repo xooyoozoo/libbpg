@@ -426,13 +426,19 @@ static int prepare_headers(HEVCVideoConfig *plane,
             goto bad_header_info;
         }
         sublayer_ordering_info = get_bits(gb, 1);
-        /* should be 1|0|1 instead of 2|1|1 but x265 doesn't do that */
-        if (   2 < get_ue_golomb(gb) /* max_dec_pic_buffering */
-            || 1 < get_ue_golomb(gb) /* num_reorder_pics */
-            || 1 < get_ue_golomb(gb) /* max_latency_increase, 0 is infinite */)
+
         {
-            fprintf(stderr, "Stream should be marked as monotically ordered (zero-delay)\n");
-            goto bad_header_info;
+            uint32_t max_dec_pic_buffer, num_reorder_pics, max_latency_incr;
+
+            max_dec_pic_buffer = get_ue_golomb(gb); /* max_dec_pic_buffering */
+            num_reorder_pics = get_ue_golomb(gb);   /* num_reorder_pics */
+            max_latency_incr = get_ue_golomb(gb);   /* max_latency_increase, 0 is infinite */
+            if (max_dec_pic_buffer > 2 || num_reorder_pics > 1 || max_latency_incr > 1) {
+                /* should be 1|0|1 instead of 2|1|1 but x265 does differently */
+                fprintf(stderr, "Stream should be marked as zero-delay (2 1 1 at most) instead of %d %d %d\n",
+                                 max_dec_pic_buffer, num_reorder_pics, max_latency_incr);
+                //goto bad_header_info;
+            }
         }
 
         log2_min_cb_size = get_ue_golomb(gb) + 3;
