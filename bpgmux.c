@@ -92,6 +92,8 @@ typedef struct BPGMuxerContext {
     uint16_t *frame_duration_tab;
     uint16_t frame_duration_tab_size;
 
+    uint16_t frame_limit;
+
     BPGColorSpaceEnum color_space;
     uint8_t limited_range;
     uint8_t premultiplied_alpha;
@@ -807,8 +809,7 @@ static uint32_t bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     is_alpha = (abuf != NULL);
     first_nal = 1;
     for(;;) {
-        if (s->frame_count >= USHRT_MAX) {
-            fprintf(stderr, "ending mux process. frame count has hit limit\n");
+        if (s->frame_count >= s->frame_limit) {
             break;
         }
         if (!is_alpha) {
@@ -936,6 +937,8 @@ static BPGMuxerContext *bpg_muxer_open()
     s->frame_ticks = 1;
     s->frame_duration_tab = NULL;
     s->frame_duration_tab_size = 0;
+
+    s->frame_limit = USHRT_MAX;
 
     s->color_space = BPG_CS_COUNT;
     s->limited_range = 255;
@@ -1202,11 +1205,12 @@ static void mux_help(int is_full)
            "Animation options:\n"
            "-fps N               set the frame rate\n"
            "                         (default = 25 or obtained from bitstream flags if available)\n"
+           "-frames N            mux up to this many frames (default and max = %d)\n"
            "-loop N              set the number of times the animation is played. 0 means\n"
            "                         infinite (default = 0)\n"
            "-delayfile file      text file containing one number per image giving the\n"
            "                         display delay per image in centiseconds.\n"
-           , DEFAULT_OUTFILENAME);
+           , DEFAULT_OUTFILENAME, USHRT_MAX);
 
     if (is_full) {
         printf("\nAdvanced options:\n"
@@ -1223,6 +1227,7 @@ static struct option mux_adv_opts[] = {
     { "premul", no_argument },
     { "loop", required_argument },
     { "fps", required_argument },
+    { "frames", required_argument },
     { "delayfile", required_argument },
     { NULL },
 };
@@ -1278,6 +1283,12 @@ int main(int argc, char **argv)
                 }
                 break;
             case 4:
+                if (sscanf(optarg, "%hu", &s->frame_limit) != 1) {
+                    fprintf(stderr, "invalid frame limit\n");
+                    exit(1);
+                }
+                break;
+            case 5:
                 frame_delay_file = optarg;
                 break;
             default:
