@@ -281,7 +281,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
     /* these will be directly used to find video cfg settings */
     uint32_t width, height, bit_depth, fps_num, fps_den;
-    uint32_t min_cb_size, pps_idx;
+    uint32_t min_cb_size; // pps_idx;
     uint32_t video_full_range_flag, tiles, wpp, dependent_slices;
     BPGColorSpaceEnum color_space;
     BPGImageFormatEnum pixel_format;
@@ -305,7 +305,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
         goto bad_header_info;
     else
         idx += ret;
-    pps_idx = idx;
+    //pps_idx = idx;
     nut = (nal_buf[0] >> 1) & 0x3f;
     if (nut != 33) {
         fprintf(stderr, "expecting SPS nal, got (%d)\n", nut);
@@ -315,9 +315,9 @@ static int prepare_headers(HEVCVideoConfig *plane,
     /* skip the initial part of the SPS up to and including
        log2_min_cb_size */
     {
-        uint32_t vps_id, max_sub_layers, profile_idc, sps_id;
+        uint32_t vps_id, max_sub_layers, sps_id; //profile_idc
         uint32_t chroma_format_idc, bit_depth_luma, bit_depth_chroma;
-        uint32_t log2_max_poc_lsb, sublayer_ordering_info, log2_min_cb_size;
+        uint32_t log2_max_poc_lsb, log2_min_cb_size; //sublayer_ordering_info
         uint32_t log2_diff_max_min_coding_block_size, log2_min_tb_size;
         uint32_t log2_diff_max_min_transform_block_size;
         uint32_t max_transform_hierarchy_depth_inter;
@@ -350,7 +350,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
         /* profile tier level */
         skip_bits(gb, 2); /* profile_space */
         skip_bits(gb, 1); /* tier_flag */
-        profile_idc = get_bits(gb, 5);
+        //profile_idc = get_bits(gb, 5);
         for(i = 0; i < 32; i++) {
             skip_bits(gb, 1); /* profile_compatibility_flag */
         }
@@ -425,7 +425,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
             fprintf(stderr, "log2_max_poc_lsb must be 8 (%d)\n", log2_max_poc_lsb);
             goto bad_header_info;
         }
-        sublayer_ordering_info = get_bits(gb, 1);
+        //sublayer_ordering_info = get_bits(gb, 1);
 
         {
             uint32_t max_dec_pic_buffer, num_reorder_pics, max_latency_incr;
