@@ -1215,7 +1215,8 @@ static void mux_help(int is_full)
     if (is_full) {
         printf("\nAdvanced options:\n"
            "-premul              set if input is already premultiplied with alpha (0 or 1, default 0)\n"
-           "-limitedrange        manually indicate whether input has clamped video range (0 or 1, default 1)\n"
+           "-limitedrange        indicate whether color input has full or limited pixel values\n"
+           "				         (0 or 1, default 1, very likely 1)\n"
            "\n\n");
     }
 
@@ -1262,7 +1263,7 @@ int main(int argc, char **argv)
         case 0:
             switch(option_index) {
             case 0:
-                s->limited_range = 1;
+                s->limited_range = !!strtol(optarg, NULL, 0);
                 break;
             case 1:
                 s->premultiplied_alpha = 1;
