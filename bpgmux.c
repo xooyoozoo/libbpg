@@ -55,6 +55,7 @@ typedef enum {
 } HEVCParallelismEnum;
 
 typedef enum {
+	INTER_NONE   = 0,
     INTER_AMP    = 1,
     INTER_TMVP   = 2,
     INTER_TU_RQT = 4,
@@ -1116,6 +1117,12 @@ static uint32_t bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const 
 
     fseek(f, 0, SEEK_END);
     out_buf_len = ftell(f);
+    if (out_buf_len > 1<<29) {
+    	fprintf(stderr, "input size larger than reasonable (512 MB)\n");
+    	fprintf(stderr, "reading in chunks might be supported in some indefinite future\n");
+    	goto hevc_load_error;
+    }
+
     fseek(f, 0, SEEK_SET);
     out_buf = (uint8_t *)malloc(out_buf_len);
     if (fread(out_buf, 1, out_buf_len, f) != out_buf_len) {
