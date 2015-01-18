@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <getopt.h>
 #include <math.h>
+#include <unistd.h>
 
 #include "bpgfmt.h"
 #include "libbpg.h"
