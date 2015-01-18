@@ -55,7 +55,7 @@ typedef enum {
 } HEVCParallelismEnum;
 
 typedef enum {
-	INTER_NONE   = 0,
+    INTER_NONE   = 0,
     INTER_AMP    = 1,
     INTER_TMVP   = 2,
     INTER_TU_RQT = 4,
@@ -226,8 +226,8 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
 
             /* log2_max_poc_lsb is defined as 8 in BPG */
             slice_pic_order_cnt_lsb = (uint8_t) get_bits(gb, 8);
-            if ((slice_pic_order_cnt_lsb < prev_poc)
-                && (256 + slice_pic_order_cnt_lsb < prev_poc)) {
+            if ((slice_pic_order_cnt_lsb < prev_poc) &&
+                (slice_pic_order_cnt_lsb != 0 || !is_IRAP)) {
                 fprintf(stderr, "input is not monotonically ordered (%d < %d)\n",
                                  slice_pic_order_cnt_lsb, prev_poc);
                 return -1;
@@ -1118,9 +1118,9 @@ static uint32_t bpg_muxer_load_hevc(uint8_t **pbuf, HEVCVideoConfig *cfg, const 
     fseek(f, 0, SEEK_END);
     out_buf_len = ftell(f);
     if (out_buf_len > 1<<29) {
-    	fprintf(stderr, "input size larger than reasonable (512 MB)\n");
-    	fprintf(stderr, "reading in chunks might be supported in some indefinite future\n");
-    	goto hevc_load_error;
+        fprintf(stderr, "input size larger than reasonable (512 MB)\n");
+        fprintf(stderr, "reading in chunks might be supported in some indefinite future\n");
+        goto hevc_load_error;
     }
 
     fseek(f, 0, SEEK_SET);
@@ -1268,7 +1268,7 @@ static void mux_help(int is_full)
         printf("\nAdvanced options:\n"
            "-premul              set if input is already premultiplied with alpha (0 or 1, default 0)\n"
            "-limitedrange        indicate whether color input has full or limited pixel values\n"
-           "				         (0 or 1, default 1, very likely 1)\n"
+           "                         (0 or 1, default 1, very likely 1)\n"
            "\n\n");
     }
 
@@ -1418,7 +1418,7 @@ int main(int argc, char **argv)
     muxed_buf_len = bpg_muxer_build_hevc(&muxed_buf, s, color_buf_len, alpha_buf_len, fdelay);
     if (muxed_buf_len < 1) {
         fprintf(stderr, "Error while building modified hevc buffer with %d frames processed\n",
-        				 s->frame_count);
+                         s->frame_count);
         goto bpgmux_fail;
     }
 
