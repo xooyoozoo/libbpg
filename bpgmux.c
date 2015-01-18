@@ -47,12 +47,20 @@ enum NALType {
 };
 
 typedef enum {
-    HEVC_PARAL_NONE,
-    HEVC_PARAL_TILES,
-    HEVC_PARAL_WPP,
+    PARALLEL_NONE  = 0,
+    PARALLEL_TILES = 1,
+    PARALLEL_WPP   = 2,
 
-    HEVC_PARAL_COUNT,
+    PARALLEL_BOTH  = 3,
 } HEVCParallelismEnum;
+
+typedef enum {
+    INTER_AMP    = 1,
+    INTER_TMVP   = 2,
+    INTER_TU_RQT = 4,
+
+    INTER_ALL    = 7,
+} HEVCInterToolsEnum;
 
 typedef struct HEVCVideoConfig {
     uint32_t width;
@@ -66,6 +74,7 @@ typedef struct HEVCVideoConfig {
     BPGImageFormatEnum pixel_format;
     BPGColorSpaceEnum color_space;
 
+    HEVCInterToolsEnum inter_tools;
     HEVCParallelismEnum parallel;
     uint8_t dependent_slices;
 
@@ -140,7 +149,7 @@ static int extract_nal(uint8_t **pnal_buf, uint32_t *pnal_len,
 
 /* check each visual frames to ensure BPG-valid parameters */
 static int parse_slice(const uint8_t *buf, const int len, const int nut,
-                       const HEVCVideoConfig *cfg,
+                       const HEVCVideoConfig *cfg, const HEVCInterToolsEnum inter_tools,
                        uint8_t *last_poc)
 {
     uint8_t is_IRAP, first_slice_segment_in_pic;
@@ -195,10 +204,6 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
             skip_bits(gb, 1);   /* slice_reserved_flag[ i ] */
 
         slice_type = get_ue_golomb(gb);
-        //if (slice_type < 1 || slice_type > 2) {
-        //    fprintf(stderr, "warning: slice_type (%d) should be I or P\n", slice_type);
-        //    return -1;
-        //}
         if (slice_type != 2 && is_IRAP) {
             fprintf(stderr, "slice_type (%d) supposed to be IRAP\n", slice_type);
             return -1;
@@ -211,12 +216,17 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
         // [...] not separate colour plane
 
         if (nut != IDR_W_RADL && nut != IDR_N_LP) {
+            if (!(inter_tools & INTER_TMVP)) {
+                fprintf(stderr, "tmvp must be set unless all frames are IDR\n");
+                return -1;
+            }
             const uint32_t short_term_ref_pic_set_sps_flag = 0;
             const uint8_t prev_poc = *last_poc;
 
             /* log2_max_poc_lsb is defined as 8 in BPG */
             slice_pic_order_cnt_lsb = (uint8_t) get_bits(gb, 8);
-            if (slice_pic_order_cnt_lsb != 0 && slice_pic_order_cnt_lsb < prev_poc) {
+            if ((slice_pic_order_cnt_lsb < prev_poc)
+                && (256 + slice_pic_order_cnt_lsb < prev_poc)) {
                 fprintf(stderr, "input is not monotonically ordered (%d < %d)\n",
                                  slice_pic_order_cnt_lsb, prev_poc);
                 return -1;
@@ -243,14 +253,23 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
                 }
 
                 if (num_neg_pics) {
-                    uint8_t delta_poc_s0_minus1;
+                    uint8_t delta_poc_s0_minus1, used_by_curr_pic_s0_flag;
                     int refed;
 
                     delta_poc_s0_minus1 = (uint8_t) get_ue_golomb(gb);
+                    used_by_curr_pic_s0_flag = get_bits(gb, 1);
+
                     refed  = slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1;
                     refed += 256 * (refed < 0);
-                    if (delta_poc_s0_minus1 > 0 && refed != prev_poc) {
-                        if (get_bits(gb, 1))    /* used_by_curr_pic_s0_flag */
+                    if (used_by_curr_pic_s0_flag) {
+                        if (inter_tools != INTER_ALL) {
+                            if (!(inter_tools & INTER_AMP))
+                                fprintf(stderr, "interpred used but AMP is not set\n");
+                            if (!(inter_tools & INTER_TU_RQT))
+                                fprintf(stderr, "interpred used but TU Inter depth doesn\'t equal Intra\n");
+                            return -1;
+                        }
+                        if (delta_poc_s0_minus1 > 0 && refed != prev_poc)
                             fprintf(stderr, "warning: ref frame (%d) is not the immediate previous (%d)\n",
                                              refed, prev_poc);
                     }
@@ -283,13 +302,14 @@ static int prepare_headers(HEVCVideoConfig *plane,
     /* these will be directly used to find video cfg settings */
     uint32_t width, height, bit_depth, fps_num, fps_den, min_cb_size;
     uint32_t video_full_range_flag, tiles, wpp, dependent_slices;
+    HEVCInterToolsEnum inter_tools;
     BPGColorSpaceEnum color_space;
     BPGImageFormatEnum pixel_format;
 
     /* not all streams provide these, so create defaults */
     color_space = DEFAULT_COLORSPACE;
-    video_full_range_flag = 0;
-    fps_num = fps_den = 0;
+    inter_tools = INTER_ALL;
+    video_full_range_flag = fps_num = fps_den = 0;
 
     out_buf = NULL;
 
@@ -435,9 +455,8 @@ static int prepare_headers(HEVCVideoConfig *plane,
             max_latency_incr = get_ue_golomb(gb);   /* max_latency_increase, 0 is infinite */
             if (max_dec_pic_buffer > 2 || num_reorder_pics > 1 || max_latency_incr > 1) {
                 /* should be 1|0|1 instead of 2|1|1 but x265 does differently */
-                fprintf(stderr, "Stream should be marked as zero-delay (2 1 1 at most) instead of %d %d %d\n",
+                fprintf(stderr, "warning: not marked as zero-delay (2 1 1 at most, got %d %d %d instead)\n",
                                  max_dec_pic_buffer, num_reorder_pics, max_latency_incr);
-                //goto bad_header_info;
             }
         }
 
@@ -449,21 +468,13 @@ static int prepare_headers(HEVCVideoConfig *plane,
 
         max_transform_hierarchy_depth_inter = get_ue_golomb(gb);
         max_transform_hierarchy_depth_intra = get_ue_golomb(gb);
-        if (max_transform_hierarchy_depth_inter != max_transform_hierarchy_depth_intra) {
-            fprintf(stderr, "max_transform_hierarchy_depth_inter must be the same as max_transform_hierarchy_depth_intra (%d %d)\n", max_transform_hierarchy_depth_inter, max_transform_hierarchy_depth_intra);
-            goto bad_header_info;
-        }
 
         scaling_list_enable_flag = get_bits(gb, 1);
         if (scaling_list_enable_flag != 0) {
             fprintf(stderr, "scaling_list_enable_flag must be 0\n");
-            return -1;
-        }
-        amp_enabled_flag = get_bits(gb, 1);
-        if (!amp_enabled_flag) {
-            fprintf(stderr, "amp_enabled_flag must be set\n");
             goto bad_header_info;
         }
+        amp_enabled_flag = get_bits(gb, 1);
         sao_enabled = get_bits(gb, 1);
         pcm_enabled_flag = get_bits(gb, 1);
         if (pcm_enabled_flag) {
@@ -473,6 +484,7 @@ static int prepare_headers(HEVCVideoConfig *plane,
             log2_diff_max_min_pcm_luma_coding_block_size = get_ue_golomb(gb);
             pcm_loop_filter_disabled_flag = get_bits(gb, 1);
         }
+
         nb_st_rps = get_ue_golomb(gb);
         if (nb_st_rps != 0) {
             fprintf(stderr, "nb_st_rps must be 0 (%d)\n", nb_st_rps);
@@ -484,10 +496,14 @@ static int prepare_headers(HEVCVideoConfig *plane,
             goto bad_header_info;
         }
         sps_temporal_mvp_enabled_flag = get_bits(gb, 1);
-        if (!sps_temporal_mvp_enabled_flag) {
-            fprintf(stderr, "sps_temporal_mvp_enabled_flag must be set\n");
-            goto bad_header_info;
+
+        inter_tools =   INTER_TU_RQT * (max_transform_hierarchy_depth_inter == max_transform_hierarchy_depth_intra)
+                      | INTER_TMVP * sps_temporal_mvp_enabled_flag
+                      | INTER_AMP * amp_enabled_flag;
+        if (inter_tools != INTER_ALL) {
+            fprintf(stderr, "warning: invalid motion sps flags, so interprediction will not be allowed\n");
         }
+
         sps_strong_intra_smoothing_enable_flag = get_bits(gb, 1);
         vui_present = get_bits(gb, 1);
         if (vui_present) {
@@ -752,7 +768,8 @@ static int prepare_headers(HEVCVideoConfig *plane,
         v->pixel_format = pixel_format;
         v->color_space = color_space;
 
-        v->parallel = (wpp << 1) | tiles;
+        v->inter_tools = inter_tools;
+        v->parallel = wpp * PARALLEL_WPP | tiles * PARALLEL_TILES;
         v->dependent_slices = (uint8_t) dependent_slices;
 
         /* store actual modified sps */
@@ -788,19 +805,24 @@ static uint32_t bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     int nal_len;
     uint32_t msps_len, cidx, aidx;
     uint8_t nut, last_poc, is_alpha, first_nal, start, l;
+    HEVCInterToolsEnum inter_tools;
 
     cidx = aidx = last_poc = 0;
+    inter_tools = s->color.inter_tools;
 
     dyn_buf_init(out_buf);
 
     /* add alpha MSPS */
     if (abuf) {
+        inter_tools &= s->alpha.inter_tools;
+
         aidx = s->alpha.pps_idx;
         msps_len = s->alpha.msps_len;
         if (cidx < 16 || msps_len < 2) {
             fprintf(stderr, "alpha sps size unexpectedly small %d %d\n", aidx, msps_len);
             goto fail;
         }
+
         memcpy(out_buf->buf + out_buf->len, s->alpha.msps, msps_len);
         out_buf->len += msps_len;
         free(s->alpha.msps);
@@ -816,6 +838,7 @@ static uint32_t bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
     }
     if (dyn_buf_resize(out_buf, out_buf->len + msps_len) < 0)
         goto fail;
+
     memcpy(out_buf->buf + out_buf->len, s->color.msps, msps_len);
     out_buf->len += msps_len;
     free(s->color.msps);
@@ -859,7 +882,7 @@ static uint32_t bpg_muxer_build_hevc(uint8_t **pout_buf, BPGMuxerContext *s,
         if (nut >= AUD)
             continue;
         if ( !((start + 2 < nal_len) &&
-               (parse_slice(nal_buf + start, nal_len, nut, &s->color, &last_poc) >= 0)) ) {
+               (parse_slice(nal_buf + start, nal_len, nut, &s->color, inter_tools, &last_poc) >= 0)) ) {
             fprintf(stderr, "error while parsing (alpha? %d) NALs\n", is_alpha);
             goto fail;
         }
@@ -1163,10 +1186,10 @@ static int check_hevc_cfg(BPGMuxerContext *s)
     }
 
     if (s->alpha_buf) {
-        if (alpha->width != color->width
-            || alpha->height != color->height
+        if (   alpha->width     != color->width
+            || alpha->height    != color->height
             || alpha->bit_depth != color->bit_depth
-            || alpha->parallel != color->parallel)
+            || alpha->parallel  != color->parallel)
         {
             fprintf(stderr, "color and alpha planes do not have similar characteristics\n");
             return -1;
@@ -1387,12 +1410,12 @@ int main(int argc, char **argv)
     /* start actual muxing process */
     muxed_buf_len = bpg_muxer_build_hevc(&muxed_buf, s, color_buf_len, alpha_buf_len, fdelay);
     if (muxed_buf_len < 1) {
-        fprintf(stderr, "Error while building modified hevc buffer\n");
+        fprintf(stderr, "Error while building modified hevc buffer with %d frames processed\n",
+        				 s->frame_count);
         goto bpgmux_fail;
     }
 
     /* start the writing process */
-
     if (bpg_muxer_finish_ext(s, f) < 0) {
         fprintf(stderr, "Error while writing extension data to disk\n");
         goto bpgmux_fail;
