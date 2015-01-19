@@ -227,7 +227,7 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
             /* log2_max_poc_lsb is defined as 8 in BPG */
             slice_pic_order_cnt_lsb = (uint8_t) get_bits(gb, 8);
             if ((slice_pic_order_cnt_lsb < prev_poc) &&
-                (slice_pic_order_cnt_lsb != 0 || !is_IRAP)) {
+                (slice_pic_order_cnt_lsb != 0 && !is_IRAP)) {
                 fprintf(stderr, "input is not monotonically ordered (%d < %d)\n",
                                  slice_pic_order_cnt_lsb, prev_poc);
                 return -1;
@@ -240,24 +240,23 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
             }
 
             if (!short_term_ref_pic_set_sps_flag) {
-                uint32_t num_neg_pics, num_pos_pics;
+                uint32_t num_neg_pics, num_pos_pics, delta_poc_s0_minus1;
 
                 num_neg_pics = get_ue_golomb(gb);
                 num_pos_pics = get_ue_golomb(gb);
 
-                if (num_neg_pics > 1 || num_pos_pics > 0) {
-                    fprintf(stderr, "too many neg (%d) or pos (%d) refs\n", num_neg_pics, num_pos_pics);
-                    return -1;
+                if (num_pos_pics > 0) {
+                    fprintf(stderr, "future references (backward pred) not allowed\n");
                 } else if (slice_type == 0) {
                     fprintf(stderr, "b-slice (2 MVs per block) in use\n");
                     return -1;
                 }
 
                 if (num_neg_pics) {
-                    uint8_t delta_poc_s0_minus1, used_by_curr_pic_s0_flag;
+                    uint8_t used_by_curr_pic_s0_flag;
                     int refed;
 
-                    delta_poc_s0_minus1 = (uint8_t) get_ue_golomb(gb);
+                    delta_poc_s0_minus1 = get_ue_golomb(gb);
                     used_by_curr_pic_s0_flag = get_bits(gb, 1);
 
                     refed  = slice_pic_order_cnt_lsb - delta_poc_s0_minus1 - 1;
@@ -274,6 +273,14 @@ static int parse_slice(const uint8_t *buf, const int len, const int nut,
                             fprintf(stderr, "warning: ref frame (%d) is not the immediate previous (%d)\n",
                                              refed, prev_poc);
                     }
+                }
+                while(num_neg_pics > 1) {
+                    if (delta_poc_s0_minus1 != get_ue_golomb(gb)) {
+                        fprintf(stderr, "multiple ref frames are not allowed\n");
+                        return -1;
+                    }
+                    get_bits(gb, 1);    /* used_by_curr_pic_s0_flag */
+                    num_neg_pics--;
                 }
             }
         } else {
