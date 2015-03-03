@@ -45,6 +45,7 @@
 #else
 # define HAVE_JCTVC 0
 #endif
+int have_jctvc = HAVE_JCTVC;
 
 typedef uint16_t PIXEL;
 
@@ -2246,7 +2247,7 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
 
     /* extract the alpha plane */
     if (img->has_alpha) {
-        if (HAVE_JCTVC == 0) {
+        if (have_jctvc == 0) {
             fprintf(stderr, "Need JCTVC encoder for extra monochrome plane\n");
             exit(1);
         }
@@ -2335,7 +2336,7 @@ int bpg_encoder_encode(BPGEncoderContext *s, Image *img,
         /* color & alpha must have same WPP flag, but bpgdec dislikes WPP + rice param adapt */
         /* turn off wpp when lossless when that tool is useful (444) or at slowest levels */
         if (p->lossless && (img->format == BPG_FORMAT_444 || p->compress_level >= 9)
-                        && (img_alpha || (HAVE_JCTVC && p->encoder_type == 0)))
+                        && (img_alpha || (have_jctvc == 1 && p->encoder_type == 0)))
             ep->wpp = 0;
 
         s->enc_ctx = s->encoder->open(ep);
