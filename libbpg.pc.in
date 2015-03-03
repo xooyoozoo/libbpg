@@ -1,0 +1,12 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+includedir=@includedir@
+libdir=@libdir@
+
+Name: libbpg
+Description: library of functions for manipulating BPG image format files
+URL: http://bellard.org/bpg/
+Version: @PACKAGE_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lbpg
+Libs.private: -lm
