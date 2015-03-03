@@ -101,7 +101,7 @@ AC_CONFIG_FILES([Makefile
                  man/templates/bpg.5.header
                  man/templates/bpgdec.1.header
                  man/templates/bpgenc.1.header
-				 man/templates/bpgmux.1.header
+                 man/templates/bpgmux.1.header
                  man/templates/bpgview.1.header
                  ])
 AC_OUTPUT
