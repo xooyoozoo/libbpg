@@ -52,12 +52,13 @@ libbpg_la_LDFLAGS = -release $(VERSION) -version-info 0:0:0
 
 
 bpgdec_SOURCES = bpgdec.c
+bpgdec_CFLAGS  = $(PNG16_CFLAGS) $(AM_CFLAGS)
 bpgdec_LDADD   = libbpg.la $(PNG16_LIBS)
 
 
 
 bpgenc_SOURCES  = bpgenc.c bpgfmt.c
-bpgenc_CFLAGS   = $(AM_CFLAGS) $(PNG16_CFLAGS)
+bpgenc_CFLAGS   = $(PNG16_CFLAGS) $(AM_CFLAGS)
 bpgenc_CPPFLAGS = $(AM_CPPFLAGS)
 bpgenc_CXXFLAGS = $(AM_CXXFLAGS)
 bpgenc_LDADD    = libbpg.la $(PNG16_LIBS)
