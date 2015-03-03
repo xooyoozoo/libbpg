@@ -1283,12 +1283,12 @@ static void mux_help(int is_full)
 }
 
 static struct option mux_adv_opts[] = {
-    { "limitedrange", required_argument },
-    { "premul", no_argument },
-    { "loop", required_argument },
-    { "fps", required_argument },
-    { "frames", required_argument },
-    { "delayfile", required_argument },
+    { "limitedrange", required_argument, 0, 0 },
+    { "premul", no_argument, 0, 0 },
+    { "loop", required_argument, 0, 0 },
+    { "fps", required_argument, 0, 0 },
+    { "frames", required_argument, 0, 0 },
+    { "delayfile", required_argument, 0, 0 },
     { NULL },
 };
 
