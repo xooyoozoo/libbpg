@@ -23,6 +23,7 @@ AX_CHECK_LINK_FLAG([-Wl,--as-needed], [LDFLAGS="${LDFLAGS} -Wl,--as-needed"])
 
 # Checks for libraries.
 AC_CHECK_LIB([m], [sqrt], [], [exit 1])
+AC_CHECK_LIB([z], [deflate], [], [exit 1])
 AC_CHECK_LIB([jpeg], [jpeg_CreateCompress], [], [exit 1])
 PKG_CHECK_MODULES([PNG16], [libpng16], [], [
     AC_CHECK_LIB([png], [png_set_alpha_mode], [], [
