@@ -2609,19 +2609,19 @@ static void help(int is_full)
 }
 
 static struct option long_opts[] = {
-    { "hash", no_argument },
-    { "keepmetadata", no_argument },
-    { "alphaq", required_argument },
-    { "lossless", no_argument },
-    { "limitedrange", no_argument },
-    { "premul", required_argument },
-    { "loop", required_argument },
-    { "fps", required_argument },
-    { "delayfile", required_argument },
-    { "aq", required_argument },
-    { "chroma-offset", required_argument },
-    { "deblock", required_argument },
-    { "psy", required_argument },
+    { "hash", no_argument, 0, 0 },
+    { "keepmetadata", no_argument, 0, 0 },
+    { "alphaq", required_argument, 0, 0 },
+    { "lossless", no_argument, 0, 0 },
+    { "limitedrange", no_argument, 0, 0 },
+    { "premul", required_argument, 0, 0 },
+    { "loop", required_argument, 0, 0 },
+    { "fps", required_argument, 0, 0 },
+    { "delayfile", required_argument, 0, 0 },
+    { "aq", required_argument, 0, 0 },
+    { "chroma-offset", required_argument, 0, 0 },
+    { "deblock", required_argument, 0, 0 },
+    { "psy", required_argument, 0, 0 },
     { NULL },
 };
 
