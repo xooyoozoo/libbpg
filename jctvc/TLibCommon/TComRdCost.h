@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -137,7 +137,7 @@ public:
   Double  calcRdCost64( UInt64 uiBits, UInt64 uiDistortion, Bool bFlag = false, DFunc eDFunc = DF_DEFAULT );
 
   Void    setDistortionWeight  ( const ComponentID compID, const Double distortionWeight ) { m_distortionWeight[compID] = distortionWeight; }
-  Void    setLambda      ( Double dLambda );
+  Void    setLambda      ( Double dLambda, const BitDepths &bitDepths );
   Void    setFrameLambda ( Double dLambda ) { m_dFrameLambda = dLambda; }
 
   Double  getSqrtLambda ()   { return m_sqrtLambda; }

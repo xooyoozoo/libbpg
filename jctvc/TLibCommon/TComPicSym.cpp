@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,8 +49,6 @@
 TComPicSym::TComPicSym()
 :m_frameWidthInCtus(0)
 ,m_frameHeightInCtus(0)
-,m_uiMaxCUWidth(0)
-,m_uiMaxCUHeight(0)
 ,m_uiMinCUWidth(0)
 ,m_uiMinCUHeight(0)
 ,m_uhTotalDepth(0)
@@ -66,33 +64,33 @@ TComPicSym::TComPicSym()
 ,m_puiTileIdxMap(NULL)
 ,m_ctuRsToTsAddrMap(NULL)
 ,m_saoBlkParams(NULL)
+,m_pParentARLBuffer(NULL)
 {}
 
 
-Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxWidth, UInt uiMaxHeight, UInt uiMaxDepth )
+Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxDepth )
 {
   UInt i;
   m_sps = sps;
   m_pps = pps;
 
-  const ChromaFormat chromaFormatIDC=sps.getChromaFormatIdc();
-  const Int iPicWidth  = sps.getPicWidthInLumaSamples();
-  const Int iPicHeight = sps.getPicHeightInLumaSamples();
+  const ChromaFormat chromaFormatIDC = sps.getChromaFormatIdc();
+  const Int iPicWidth      = sps.getPicWidthInLumaSamples();
+  const Int iPicHeight     = sps.getPicHeightInLumaSamples();
+  const UInt uiMaxCuWidth  = sps.getMaxCUWidth();
+  const UInt uiMaxCuHeight = sps.getMaxCUHeight();
 
   m_uhTotalDepth       = uiMaxDepth;
   m_numPartitionsInCtu = 1<<(m_uhTotalDepth<<1);
 
-  m_uiMaxCUWidth       = uiMaxWidth;
-  m_uiMaxCUHeight      = uiMaxHeight;
+  m_uiMinCUWidth       = uiMaxCuWidth  >> m_uhTotalDepth;
+  m_uiMinCUHeight      = uiMaxCuHeight >> m_uhTotalDepth;
 
-  m_uiMinCUWidth       = uiMaxWidth  >> m_uhTotalDepth;
-  m_uiMinCUHeight      = uiMaxHeight >> m_uhTotalDepth;
+  m_numPartInCtuWidth  = uiMaxCuWidth  / m_uiMinCUWidth;  // equivalent to 1<<m_uhTotalDepth
+  m_numPartInCtuHeight = uiMaxCuHeight / m_uiMinCUHeight; // equivalent to 1<<m_uhTotalDepth
 
-  m_numPartInCtuWidth  = m_uiMaxCUWidth  / m_uiMinCUWidth;  // equivalent to 1<<m_uhTotalDepth
-  m_numPartInCtuHeight = m_uiMaxCUHeight / m_uiMinCUHeight; // equivalent to 1<<m_uhTotalDepth
-
-  m_frameWidthInCtus   = ( iPicWidth %m_uiMaxCUWidth  ) ? iPicWidth /m_uiMaxCUWidth  + 1 : iPicWidth /m_uiMaxCUWidth;
-  m_frameHeightInCtus  = ( iPicHeight%m_uiMaxCUHeight ) ? iPicHeight/m_uiMaxCUHeight + 1 : iPicHeight/m_uiMaxCUHeight;
+  m_frameWidthInCtus   = ( iPicWidth %uiMaxCuWidth  ) ? iPicWidth /uiMaxCuWidth  + 1 : iPicWidth /uiMaxCuWidth;
+  m_frameHeightInCtus  = ( iPicHeight%uiMaxCuHeight ) ? iPicHeight/uiMaxCuHeight + 1 : iPicHeight/uiMaxCuHeight;
 
   m_numCtusInFrame     = m_frameWidthInCtus * m_frameHeightInCtus;
   m_pictureCtuArray    = new TComDataCU*[m_numCtusInFrame];
@@ -100,12 +98,19 @@ Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxWid
   clearSliceBuffer();
   allocateNewSlice();
 
+#if ADAPTIVE_QP_SELECTION
+  if (m_pParentARLBuffer == NULL)
+  {
+     m_pParentARLBuffer = new TCoeff[uiMaxCuWidth*uiMaxCuHeight*MAX_NUM_COMPONENT];
+  }
+#endif
+
   for ( i=0; i<m_numCtusInFrame ; i++ )
   {
     m_pictureCtuArray[i] = new TComDataCU;
-    m_pictureCtuArray[i]->create( chromaFormatIDC, m_numPartitionsInCtu, m_uiMaxCUWidth, m_uiMaxCUHeight, false, m_uiMaxCUWidth >> m_uhTotalDepth
+    m_pictureCtuArray[i]->create( chromaFormatIDC, m_numPartitionsInCtu, uiMaxCuWidth, uiMaxCuHeight, false, uiMaxCuWidth >> m_uhTotalDepth
 #if ADAPTIVE_QP_SELECTION
-      , true
+      , m_pParentARLBuffer
 #endif
       );
   }
@@ -154,6 +159,9 @@ Void TComPicSym::destroy()
   {
     delete[] m_saoBlkParams; m_saoBlkParams = NULL;
   }
+
+  delete [] m_pParentARLBuffer;
+  m_pParentARLBuffer = NULL;
 }
 
 Void TComPicSym::allocateNewSlice()
@@ -250,8 +258,8 @@ Void TComPicSym::xInitTiles()
   {
     if (m_pps.getTilesEnabledFlag())
     {
-      minHeight = 64  / g_uiMaxCUHeight;
-      minWidth  = 256 / g_uiMaxCUWidth;
+      minHeight = 64  / m_sps.getMaxCUHeight();
+      minWidth  = 256 / m_sps.getMaxCUWidth();
     }
   }
   for(Int row=0; row < numRows; row++)

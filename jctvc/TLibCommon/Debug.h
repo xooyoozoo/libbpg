@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -119,10 +119,7 @@ Void printMacroSettings();
 
 //Debugging
 
-extern Bool g_bFinalEncode;
 extern UInt g_debugCounter;
-extern Bool g_printDebug;
-extern Void* g_debugAddr;
 
 #ifdef DEBUG_ENCODER_SEARCH_BINS
 extern const UInt debugEncoderSearchBinTargetLine;

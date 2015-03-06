@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -126,9 +126,13 @@ static inline Bool enable4ChromaPUsInIntraNxNCU(const ChromaFormat chFmt)
 
 //returns the part index of the luma region that is co-located with the specified chroma region
 
-static inline UInt getChromasCorrespondingPULumaIdx(const UInt lumaZOrderIdxInCtu, const ChromaFormat chFmt)
+static inline UInt
+getChromasCorrespondingPULumaIdx(const UInt lumaZOrderIdxInCtu,
+                                 const ChromaFormat chFmt,
+                                 const Int partsPerMinCU  // 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()))
+                                 )
 {
-  return enable4ChromaPUsInIntraNxNCU(chFmt) ? lumaZOrderIdxInCtu : lumaZOrderIdxInCtu & (~((1<<(2*g_uiAddCUDepth))-1)); //(lumaZOrderIdxInCtu/numParts)*numParts;
+  return enable4ChromaPUsInIntraNxNCU(chFmt) ? lumaZOrderIdxInCtu : lumaZOrderIdxInCtu & (~(partsPerMinCU-1));
 }
 
 //------------------------------------------------
@@ -162,13 +166,9 @@ static inline Bool TUCompRectHasAssociatedTransformSkipFlag(const TComRectangle 
 
 //------------------------------------------------
 
-static inline Int getTransformShift(const ChannelType type, const UInt uiLog2TrSize)
+static inline Int getTransformShift(const Int channelBitDepth, const UInt uiLog2TrSize, const Int maxLog2TrDynamicRange)
 {
-#if O0043_BEST_EFFORT_DECODING
-  return g_maxTrDynamicRange[type] - g_bitDepthInStream[type] - uiLog2TrSize;
-#else
-  return g_maxTrDynamicRange[type] - g_bitDepth[type] - uiLog2TrSize;
-#endif
+  return maxLog2TrDynamicRange - channelBitDepth - uiLog2TrSize;
 }
 
 

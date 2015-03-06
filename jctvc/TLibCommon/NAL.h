@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,6 @@
 #ifndef __NAL__
 #define __NAL__
 
-#include <vector>
 #include <sstream>
 #include "CommonDef.h"
 
@@ -106,7 +105,7 @@ struct NALUnitEBSP : public NALUnit
   std::ostringstream m_nalUnitData;
 
   /**
-   * convert the OutputNALUnit #nalu# into EBSP format by writing out
+   * convert the OutputNALUnit nalu into EBSP format by writing out
    * the NALUnit header, then the rbsp_bytes including any
    * emulation_prevention_three_byte symbols.
    */

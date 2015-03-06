@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -81,6 +81,7 @@
 // ====================================================================================================================
 // Tool Switches
 // ====================================================================================================================
+#define T0196_SELECTIVE_RDOQ                              1 ///< selective RDOQ
 
 #define HARMONIZE_GOP_FIRST_FIELD_COUPLE                  1
 #define EFFICIENT_FIELD_IRAP                              1
@@ -221,6 +222,7 @@
 
 #define O0043_BEST_EFFORT_DECODING                        0 ///< 0 (default) = disable code related to best effort decoding, 1 = enable code relating to best effort decoding [ decode-side only ].
 
+#define MAX_QP_OFFSET_LIST_SIZE                           6 ///< Maximum size of QP offset list is 6 entries
 // Cost mode support
 
 #define LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP       0 ///< QP to use for lossless coding.
@@ -735,6 +737,16 @@ private:
 };
 
 
+struct BitDepths
+{
+#if O0043_BEST_EFFORT_DECODING
+  Int recon[MAX_NUM_CHANNEL_TYPE]; ///< the bit depth used for reconstructing the video
+  Int stream[MAX_NUM_CHANNEL_TYPE];///< the bit depth used indicated in the SPS
+#else
+  Int recon[MAX_NUM_CHANNEL_TYPE]; ///< the bit depth as indicated in the SPS
+#endif
+};
+
 /// parameters for deblocking filter
 typedef struct _LFCUParam
 {
@@ -757,11 +769,11 @@ struct TUEntropyCodingParameters
 };
 
 
-struct TComDigest
+struct TComPictureHash
 {
   std::vector<UChar> hash;
 
-  Bool operator==(const TComDigest &other) const
+  Bool operator==(const TComPictureHash &other) const
   {
     if (other.hash.size() != hash.size())
     {
@@ -777,7 +789,7 @@ struct TComDigest
     return true;
   }
 
-  Bool operator!=(const TComDigest &other) const
+  Bool operator!=(const TComPictureHash &other) const
   {
     return !(*this == other);
   }

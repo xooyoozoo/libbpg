@@ -83,7 +83,7 @@ bpgenc_SOURCES += jctvc_glue.cpp \
 		jctvc/TLibEncoder/TEncRateCtrl.cpp \
 		jctvc/TLibEncoder/TEncPreanalyzer.cpp \
 		jctvc/TLibEncoder/NALwrite.cpp \
-		jctvc/TLibEncoder/TEncAnalyze.cpp \
+		jctvc/TLibEncoder/SEIEncoder.cpp \
 		jctvc/TLibEncoder/TEncSbac.cpp \
 		jctvc/TLibEncoder/TEncEntropy.cpp \
 		jctvc/TLibCommon/TComWeightPrediction.cpp \

@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -131,7 +131,7 @@ public:
     RESERVED,
   } method;
 
-  TComDigest m_digest;
+  TComPictureHash m_pictureHash;
 };
 
 class SEIActiveParameterSets : public SEI
@@ -158,6 +158,7 @@ class SEIBufferingPeriod : public SEI
 {
 public:
   PayloadType payloadType() const { return BUFFERING_PERIOD; }
+  void copyTo (SEIBufferingPeriod& target);
 
   SEIBufferingPeriod()
   : m_bpSeqParameterSetId (0)
@@ -187,25 +188,16 @@ class SEIPictureTiming : public SEI
 {
 public:
   PayloadType payloadType() const { return PICTURE_TIMING; }
+  void copyTo (SEIPictureTiming& target);
 
   SEIPictureTiming()
   : m_picStruct               (0)
   , m_sourceScanType          (0)
   , m_duplicateFlag           (false)
   , m_picDpbOutputDuDelay     (0)
-  , m_numNalusInDuMinus1      (NULL)
-  , m_duCpbRemovalDelayMinus1 (NULL)
   {}
   virtual ~SEIPictureTiming()
   {
-    if( m_numNalusInDuMinus1 != NULL )
-    {
-      delete m_numNalusInDuMinus1;
-    }
-    if( m_duCpbRemovalDelayMinus1  != NULL )
-    {
-      delete m_duCpbRemovalDelayMinus1;
-    }
   }
 
   UInt  m_picStruct;
@@ -218,8 +210,8 @@ public:
   UInt  m_numDecodingUnitsMinus1;
   Bool  m_duCommonCpbRemovalDelayFlag;
   UInt  m_duCommonCpbRemovalDelayMinus1;
-  UInt* m_numNalusInDuMinus1;
-  UInt* m_duCpbRemovalDelayMinus1;
+  std::vector<UInt> m_numNalusInDuMinus1;
+  std::vector<UInt> m_duCpbRemovalDelayMinus1;
 };
 
 class SEIDecodingUnitInfo : public SEI
@@ -493,12 +485,10 @@ public:
   PayloadType payloadType() const { return SCALABLE_NESTING; }
 
   SEIScalableNesting() {}
+
   virtual ~SEIScalableNesting()
   {
-    if (!m_callerOwnsSEIs)
-    {
-      deleteSEIs(m_nestedSEIs);
-    }
+    deleteSEIs(m_nestedSEIs);
   }
 
   Bool  m_bitStreamSubsetFlag;
@@ -513,7 +503,6 @@ public:
   UInt  m_nestingNumLayersMinus1;                    //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0
   UChar m_nestingLayerId[MAX_NESTING_NUM_LAYER];     //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0. This can e.g. be a static array of 64 UChar values
 
-  Bool  m_callerOwnsSEIs;
   SEIMessages m_nestedSEIs;
 };
 

@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,12 @@
 #endif // _MSC_VER > 1000
 #include "TypeDef.h"
 
+#ifdef _MSC_VER
+#if _MSC_VER <= 1500
+inline Int64 abs (Int64 x) { return _abs64(x); };
+#endif
+#endif
+
 //! \ingroup TLibCommon
 //! \{
 
@@ -57,7 +63,7 @@
 // Version information
 // ====================================================================================================================
 
-#define NV_VERSION        "16.2"                 ///< Current software version
+#define NV_VERSION        "16.3"                 ///< Current software version
 
 // ====================================================================================================================
 // Platform information
@@ -132,11 +138,8 @@
 // Macro functions
 // ====================================================================================================================
 
-extern Int g_bitDepth[MAX_NUM_CHANNEL_TYPE];
-
 template <typename T> inline T Clip3 (const T minVal, const T maxVal, const T a) { return std::min<T> (std::max<T> (minVal, a) , maxVal); }  ///< general min/max clip
 template <typename T> inline T ClipBD(const T x, const Int bitDepth)             { return Clip3(T(0), T((1 << bitDepth)-1), x);           }
-template <typename T> inline T Clip  (const T x, const ChannelType type)         { return ClipBD(x, g_bitDepth[type]);                    }
 
 template <typename T> inline Void Check3( T minVal, T maxVal, T a)
 {

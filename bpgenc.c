@@ -1986,7 +1986,7 @@ static int build_modified_hevc(uint8_t **pout_buf,
             aidx += nal_len;
         }
         start = 3 + (nal_buf[2] == 0);
-        fprintf(stderr, "nut %d\n", (nal_buf[start] >> 1) & 0x3f);
+
         if (!is_alpha) {
             int nut;
             /* add SEI NAL for the frame duration (animation case) */

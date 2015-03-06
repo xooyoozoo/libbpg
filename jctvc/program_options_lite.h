@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,15 +63,21 @@ namespace df
       const char* what() const throw() { return "Option Parse Failure"; }
     };
 
+    struct ErrorReporter
+    {
+      ErrorReporter() : is_errored(0) {}
+      virtual ~ErrorReporter() {}
+      virtual std::ostream& error(const std::string& where);
+      virtual std::ostream& warn(const std::string& where);
+      bool is_errored;
+    };
+
+    extern ErrorReporter default_error_reporter;
+
     void doHelp(std::ostream& out, Options& opts, unsigned columns = 80);
-    unsigned parseGNU(Options& opts, unsigned argc, const char* argv[]);
-    unsigned parseSHORT(Options& opts, unsigned argc, const char* argv[]);
-    std::list<const char*> scanArgv(Options& opts, unsigned argc, const char* argv[]);
-    void scanLine(Options& opts, std::string& line);
-    void scanFile(Options& opts, std::istream& in);
+    std::list<const char*> scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
     void setDefaults(Options& opts);
-    void parseConfigFile(Options& opts, const std::string& filename);
-    bool storePair(Options& opts, const std::string& name, const std::string& value);
+    void parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
 
     /** OptionBase: Virtual base class for storing information relating to a
      * specific option This base class describes common elements.  Type specific
@@ -85,7 +91,7 @@ namespace df
       virtual ~OptionBase() {}
 
       /* parse argument arg, to obtain a value for the option */
-      virtual void parse(const std::string& arg) = 0;
+      virtual void parse(const std::string& arg, ErrorReporter&) = 0;
       /* set the argument to the default value */
       virtual void setDefault() = 0;
 
@@ -101,7 +107,7 @@ namespace df
       : OptionBase(name, desc), opt_storage(storage), opt_default_val(default_val)
       {}
 
-      void parse(const std::string& arg);
+      void parse(const std::string& arg, ErrorReporter&);
 
       void setDefault()
       {
@@ -115,7 +121,7 @@ namespace df
     /* Generic parsing */
     template<typename T>
     inline void
-    Option<T>::parse(const std::string& arg)
+    Option<T>::parse(const std::string& arg, ErrorReporter&)
     {
       std::istringstream arg_ss (arg,std::istringstream::in);
       arg_ss.exceptions(std::ios::failbit);
@@ -133,7 +139,7 @@ namespace df
      * first word */
     template<>
     inline void
-    Option<std::string>::parse(const std::string& arg)
+    Option<std::string>::parse(const std::string& arg, ErrorReporter&)
     {
       opt_storage = arg;
     }
@@ -141,15 +147,15 @@ namespace df
     /** Option class for argument handling using a user provided function */
     struct OptionFunc : public OptionBase
     {
-      typedef void (Func)(Options&, const std::string&);
+      typedef void (Func)(Options&, const std::string&, ErrorReporter&);
 
       OptionFunc(const std::string& name, Options& parent_, Func *func_, const std::string& desc)
       : OptionBase(name, desc), parent(parent_), func(func_)
       {}
 
-      void parse(const std::string& arg)
+      void parse(const std::string& arg, ErrorReporter& error_reporter)
       {
-        func(parent, arg);
+        func(parent, arg, error_reporter);
       }
 
       void setDefault()
@@ -159,7 +165,7 @@ namespace df
 
     private:
       Options& parent;
-      void (*func)(Options&, const std::string&);
+      Func* func;
     };
 
     class OptionSpecific;

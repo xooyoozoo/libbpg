@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -287,6 +287,7 @@ Void TComInterpolationFilter::filterHor(Int bitDepth, Pel *src, Int srcStride, P
  * \brief Filter a block of samples (vertical)
  *
  * \tparam N          Number of taps
+ * \param  bitDepth   Bit depth
  * \param  src        Pointer to source samples
  * \param  srcStride  Stride of source samples
  * \param  dst        Pointer to destination samples
@@ -325,6 +326,7 @@ Void TComInterpolationFilter::filterVer(Int bitDepth, Pel *src, Int srcStride, P
 /**
  * \brief Filter a block of Luma/Chroma samples (horizontal)
  *
+ * \param  compID     Chroma component ID
  * \param  src        Pointer to source samples
  * \param  srcStride  Stride of source samples
  * \param  dst        Pointer to destination samples
@@ -333,23 +335,24 @@ Void TComInterpolationFilter::filterVer(Int bitDepth, Pel *src, Int srcStride, P
  * \param  height     Height of block
  * \param  frac       Fractional sample offset
  * \param  isLast     Flag indicating whether it is the last filtering operation
+ * \param  fmt        Chroma format
  */
-Void TComInterpolationFilter::filterHor(const ComponentID compID, Pel *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, Int frac, Bool isLast, const ChromaFormat fmt )
+Void TComInterpolationFilter::filterHor(const ComponentID compID, Pel *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, Int frac, Bool isLast, const ChromaFormat fmt, const Int bitDepth )
 {
   if ( frac == 0 )
   {
-    filterCopy(g_bitDepth[toChannelType(compID)], src, srcStride, dst, dstStride, width, height, true, isLast );
+    filterCopy(bitDepth, src, srcStride, dst, dstStride, width, height, true, isLast );
   }
   else if (isLuma(compID))
   {
     assert(frac >= 0 && frac < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS);
-    filterHor<NTAPS_LUMA>(g_bitDepth[toChannelType(compID)], src, srcStride, dst, dstStride, width, height, isLast, m_lumaFilter[frac]);
+    filterHor<NTAPS_LUMA>(bitDepth, src, srcStride, dst, dstStride, width, height, isLast, m_lumaFilter[frac]);
   }
   else
   {
     const UInt csx = getComponentScaleX(compID, fmt);
     assert(frac >=0 && csx<2 && (frac<<(1-csx)) < CHROMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS);
-    filterHor<NTAPS_CHROMA>(g_bitDepth[toChannelType(compID)], src, srcStride, dst, dstStride, width, height, isLast, m_chromaFilter[frac<<(1-csx)]);
+    filterHor<NTAPS_CHROMA>(bitDepth, src, srcStride, dst, dstStride, width, height, isLast, m_chromaFilter[frac<<(1-csx)]);
   }
 }
 
@@ -357,6 +360,7 @@ Void TComInterpolationFilter::filterHor(const ComponentID compID, Pel *src, Int 
 /**
  * \brief Filter a block of Luma/Chroma samples (vertical)
  *
+ * \param  compID     Colour component ID
  * \param  src        Pointer to source samples
  * \param  srcStride  Stride of source samples
  * \param  dst        Pointer to destination samples
@@ -366,23 +370,24 @@ Void TComInterpolationFilter::filterHor(const ComponentID compID, Pel *src, Int 
  * \param  frac       Fractional sample offset
  * \param  isFirst    Flag indicating whether it is the first filtering operation
  * \param  isLast     Flag indicating whether it is the last filtering operation
+ * \param  fmt        Chroma format
  */
-Void TComInterpolationFilter::filterVer(const ComponentID compID, Pel *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, Int frac, Bool isFirst, Bool isLast, const ChromaFormat fmt )
+Void TComInterpolationFilter::filterVer(const ComponentID compID, Pel *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, Int frac, Bool isFirst, Bool isLast, const ChromaFormat fmt, const Int bitDepth )
 {
   if ( frac == 0 )
   {
-    filterCopy(g_bitDepth[toChannelType(compID)], src, srcStride, dst, dstStride, width, height, isFirst, isLast );
+    filterCopy(bitDepth, src, srcStride, dst, dstStride, width, height, isFirst, isLast );
   }
   else if (isLuma(compID))
   {
     assert(frac >= 0 && frac < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS);
-    filterVer<NTAPS_LUMA>(g_bitDepth[toChannelType(compID)], src, srcStride, dst, dstStride, width, height, isFirst, isLast, m_lumaFilter[frac]);
+    filterVer<NTAPS_LUMA>(bitDepth, src, srcStride, dst, dstStride, width, height, isFirst, isLast, m_lumaFilter[frac]);
   }
   else
   {
     const UInt csy = getComponentScaleY(compID, fmt);
     assert(frac >=0 && csy<2 && (frac<<(1-csy)) < CHROMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS);
-    filterVer<NTAPS_CHROMA>(g_bitDepth[toChannelType(compID)], src, srcStride, dst, dstStride, width, height, isFirst, isLast, m_chromaFilter[frac<<(1-csy)]);
+    filterVer<NTAPS_CHROMA>(bitDepth, src, srcStride, dst, dstStride, width, height, isFirst, isLast, m_chromaFilter[frac<<(1-csy)]);
   }
 }
 

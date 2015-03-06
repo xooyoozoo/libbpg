@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -277,7 +277,7 @@ Void TComYuv::copyPartToPartComponentMxN  ( const ComponentID ch, TComYuv* pcYuv
 
 
 
-Void TComYuv::addClip( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize )
+Void TComYuv::addClip( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize, const BitDepths &clipBitDepths )
 {
   for(Int chan=0; chan<getNumberValidComponents(); chan++)
   {
@@ -292,9 +292,9 @@ Void TComYuv::addClip( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const
     const UInt iSrc0Stride = pcYuvSrc0->getStride(ch);
     const UInt iSrc1Stride = pcYuvSrc1->getStride(ch);
     const UInt iDstStride  = getStride(ch);
-    const Int clipbd = g_bitDepth[toChannelType(ch)];
+    const Int clipbd = clipBitDepths.recon[toChannelType(ch)];
 #if O0043_BEST_EFFORT_DECODING
-    const Int bitDepthDelta = g_bitDepthInStream[toChannelType(ch)] - g_bitDepth[toChannelType(ch)];
+    const Int bitDepthDelta = clipBitDepths.stream[toChannelType(ch)] - clipbd;
 #endif
 
     for ( Int y = uiPartHeight-1; y >= 0; y-- )
@@ -349,7 +349,7 @@ Void TComYuv::subtract( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, cons
 
 
 
-Void TComYuv::addAvg( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt iPartUnitIdx, const UInt uiWidth, const UInt uiHeight )
+Void TComYuv::addAvg( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt iPartUnitIdx, const UInt uiWidth, const UInt uiHeight, const BitDepths &clipBitDepths )
 {
   for(Int chan=0; chan<getNumberValidComponents(); chan++)
   {
@@ -361,7 +361,7 @@ Void TComYuv::addAvg( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const 
     const UInt  iSrc0Stride = pcYuvSrc0->getStride(ch);
     const UInt  iSrc1Stride = pcYuvSrc1->getStride(ch);
     const UInt  iDstStride  = getStride(ch);
-    const Int   clipbd      = g_bitDepth[toChannelType(ch)];
+    const Int   clipbd      = clipBitDepths.recon[toChannelType(ch)];
     const Int   shiftNum    = std::max<Int>(2, (IF_INTERNAL_PREC - clipbd)) + 1;
     const Int   offset      = ( 1 << ( shiftNum - 1 ) ) + 2 * IF_INTERNAL_OFFS;
 

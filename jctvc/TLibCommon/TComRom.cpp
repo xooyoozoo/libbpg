@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,16 +248,12 @@ Void destroyROM()
 // Data structure related table & variable
 // ====================================================================================================================
 
-UInt g_uiMaxCUWidth  = MAX_CU_SIZE;
-UInt g_uiMaxCUHeight = MAX_CU_SIZE;
-UInt g_uiMaxCUDepth  = MAX_CU_DEPTH;
-UInt g_uiAddCUDepth  = 0;
 UInt g_auiZscanToRaster [ MAX_NUM_SPU_W*MAX_NUM_SPU_W ] = { 0, };
 UInt g_auiRasterToZscan [ MAX_NUM_SPU_W*MAX_NUM_SPU_W ] = { 0, };
 UInt g_auiRasterToPelX  [ MAX_NUM_SPU_W*MAX_NUM_SPU_W ] = { 0, };
 UInt g_auiRasterToPelY  [ MAX_NUM_SPU_W*MAX_NUM_SPU_W ] = { 0, };
 
-UInt g_auiPUOffset[NUMBER_OF_PART_SIZES] = { 0, 8, 4, 4, 2, 10, 1, 5};
+const UInt g_auiPUOffset[NUMBER_OF_PART_SIZES] = { 0, 8, 4, 4, 2, 10, 1, 5};
 
 Void initZscanToRaster ( Int iMaxDepth, Int iDepth, UInt uiStartVal, UInt*& rpuiCurrIdx )
 {
@@ -322,14 +318,12 @@ Void initRasterToPelXY ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth 
   }
 }
 
-Int g_maxTrDynamicRange[MAX_NUM_CHANNEL_TYPE];
-
-Int g_quantScales[SCALING_LIST_REM_NUM] =
+const Int g_quantScales[SCALING_LIST_REM_NUM] =
 {
   26214,23302,20560,18396,16384,14564
 };
 
-Int g_invQuantScales[SCALING_LIST_REM_NUM] =
+const Int g_invQuantScales[SCALING_LIST_REM_NUM] =
 {
   40,45,51,57,64,72
 };
@@ -542,16 +536,6 @@ const UChar g_chroma422IntraAngleMappingTable[NUM_INTRA_MODE] =
   { 0, 1, 2, 2, 2, 2, 3, 5, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 23, 24, 24, 25, 25, 26, 27, 27, 28, 28, 29, 29, 30, 31, DM_CHROMA_IDX};
 
 // ====================================================================================================================
-// Bit-depth
-// ====================================================================================================================
-
-Int g_bitDepth   [MAX_NUM_CHANNEL_TYPE] = {8, 8};
-#if O0043_BEST_EFFORT_DECODING
-Int g_bitDepthInStream   [MAX_NUM_CHANNEL_TYPE] = {8, 8}; // In the encoder, this is the same as g_bitDepth. In the decoder, this can vary from g_bitDepth if the decoder is forced to use 'best-effort decoding' at a particular bit-depth.
-#endif
-Int g_PCMBitDepth[MAX_NUM_CHANNEL_TYPE] = {8, 8};    // PCM bit-depth
-
-// ====================================================================================================================
 // Misc.
 // ====================================================================================================================
 
@@ -643,7 +627,7 @@ const Char *MatrixType_DC[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM] =
   },
 };
 
-Int g_quantTSDefault4x4[4*4] =
+const Int g_quantTSDefault4x4[4*4] =
 {
   16,16,16,16,
   16,16,16,16,
@@ -651,7 +635,7 @@ Int g_quantTSDefault4x4[4*4] =
   16,16,16,16
 };
 
-Int g_quantIntraDefault8x8[8*8] =
+const Int g_quantIntraDefault8x8[8*8] =
 {
   16,16,16,16,17,18,21,24,
   16,16,16,16,17,19,22,25,
@@ -663,7 +647,7 @@ Int g_quantIntraDefault8x8[8*8] =
   24,25,29,36,47,65,88,115
 };
 
-Int g_quantInterDefault8x8[8*8] =
+const Int g_quantInterDefault8x8[8*8] =
 {
   16,16,16,16,17,18,20,24,
   16,16,16,17,18,20,24,25,
@@ -675,7 +659,7 @@ Int g_quantInterDefault8x8[8*8] =
   24,25,28,33,41,54,71,91
 };
 
-UInt g_scalingListSize   [SCALING_LIST_SIZE_NUM] = {16,64,256,1024};
-UInt g_scalingListSizeX  [SCALING_LIST_SIZE_NUM] = { 4, 8, 16,  32};
+const UInt g_scalingListSize   [SCALING_LIST_SIZE_NUM] = {16,64,256,1024};
+const UInt g_scalingListSizeX  [SCALING_LIST_SIZE_NUM] = { 4, 8, 16,  32};
 
 //! \}

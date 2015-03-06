@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,6 +49,20 @@ namespace df
 {
   namespace program_options_lite
   {
+    ErrorReporter default_error_reporter;
+
+    ostream& ErrorReporter::error(const string& where)
+    {
+      is_errored = 1;
+      cerr << where << " error: ";
+      return cerr;
+    }
+
+    ostream& ErrorReporter::warn(const string& where)
+    {
+      cerr << where << " warning: ";
+      return cerr;
+    }
 
     Options::~Options()
     {
@@ -96,13 +110,13 @@ namespace df
       return OptionSpecific(*this);
     }
 
-    static void setOptions(Options::NamesPtrList& opt_list, const string& value)
+    static void setOptions(Options::NamesPtrList& opt_list, const string& value, ErrorReporter& error_reporter)
     {
       /* multiple options may be registered for the same name:
        *   allow each to parse value */
       for (Options::NamesPtrList::iterator it = opt_list.begin(); it != opt_list.end(); ++it)
       {
-        (*it)->opt->parse(value);
+        (*it)->opt->parse(value, error_reporter);
       }
     }
 
@@ -235,7 +249,26 @@ namespace df
       }
     }
 
-    bool storePair(Options& opts, bool allow_long, bool allow_short, const string& name, const string& value)
+    struct OptionWriter
+    {
+      OptionWriter(Options& rOpts, ErrorReporter& err)
+      : opts(rOpts), error_reporter(err)
+      {}
+      virtual ~OptionWriter() {}
+
+      virtual const string where() = 0;
+
+      bool storePair(bool allow_long, bool allow_short, const string& name, const string& value);
+      bool storePair(const string& name, const string& value)
+      {
+        return storePair(true, true, name, value);
+      }
+
+      Options& opts;
+      ErrorReporter& error_reporter;
+    };
+
+    bool OptionWriter::storePair(bool allow_long, bool allow_short, const string& name, const string& value)
     {
       bool found = false;
       Options::NamesMap::iterator opt_it;
@@ -260,24 +293,31 @@ namespace df
 
       if (!found)
       {
-        /* not found */
-        cerr << "Unknown option: `" << name << "' (value:`" << value << "')" << endl;
+        error_reporter.error(where())
+          << "Unknown option `" << name << "' (value:`" << value << "')\n";
         return false;
       }
 
-      setOptions((*opt_it).second, value);
+      setOptions((*opt_it).second, value, error_reporter);
       return true;
     }
 
-    bool storePair(Options& opts, const string& name, const string& value)
+    struct ArgvParser : public OptionWriter
     {
-      return storePair(opts, true, true, name, value);
-    }
+      ArgvParser(Options& rOpts, ErrorReporter& rError_reporter)
+      : OptionWriter(rOpts, rError_reporter)
+      {}
+
+      const string where() { return "command line"; }
+
+      unsigned parseGNU(unsigned argc, const char* argv[]);
+      unsigned parseSHORT(unsigned argc, const char* argv[]);
+    };
 
     /**
      * returns number of extra arguments consumed
      */
-    unsigned parseGNU(Options& opts, unsigned argc, const char* argv[])
+    unsigned ArgvParser::parseGNU(unsigned argc, const char* argv[])
     {
       /* gnu style long options can take the forms:
        *  --option=arg
@@ -303,7 +343,7 @@ namespace df
         }
         extra_argc_consumed = 1;
 #endif
-        if(!storePair(opts, true, false, option, "1"))
+        if(!storePair(true, false, option, "1"))
         {
           return 0;
         }
@@ -312,13 +352,13 @@ namespace df
       {
         /* argument occurs after option_sep */
         string val = arg.substr(arg_opt_sep + 1);
-        storePair(opts, true, false, option, val);
+        storePair(true, false, option, val);
       }
 
       return extra_argc_consumed;
     }
 
-    unsigned parseSHORT(Options& opts, unsigned argc, const char* argv[])
+    unsigned ArgvParser::parseSHORT(unsigned argc, const char* argv[])
     {
       /* short options can take the forms:
        *  --option arg
@@ -333,17 +373,20 @@ namespace df
       /* xxx, need to handle case where option isn't required */
       if (argc == 1)
       {
-        cerr << "Not processing option without argument `" << option << "'" << endl;
+        error_reporter.error(where())
+          << "Not processing option `" << option << "' without argument\n";
         return 0; /* run out of argv for argument */
       }
-      storePair(opts, false, true, option, string(argv[1]));
+      storePair(false, true, option, string(argv[1]));
 
       return 1;
     }
 
     list<const char*>
-    scanArgv(Options& opts, unsigned argc, const char* argv[])
+    scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter)
     {
+      ArgvParser avp(opts, error_reporter);
+
       /* a list for anything that didn't get handled as an option */
       list<const char*> non_option_arguments;
 
@@ -365,11 +408,7 @@ namespace df
         if (argv[i][1] != '-')
         {
           /* handle short (single dash) options */
-#if 0
-          i += parsePOSIX(opts, argc - i, &argv[i]);
-#else
-          i += parseSHORT(opts, argc - i, &argv[i]);
-#endif
+          i += avp.parseSHORT(argc - i, &argv[i]);
           continue;
         }
 
@@ -384,13 +423,34 @@ namespace df
         }
 
         /* handle long (double dash) options */
-        i += parseGNU(opts, argc - i, &argv[i]);
+        i += avp.parseGNU(argc - i, &argv[i]);
       }
 
       return non_option_arguments;
     }
 
-    void scanLine(Options& opts, string& line)
+    struct CfgStreamParser : public OptionWriter
+    {
+      CfgStreamParser(const string& rName, Options& rOpts, ErrorReporter& rError_reporter)
+      : OptionWriter(rOpts, rError_reporter)
+      , name(rName)
+      , linenum(0)
+      {}
+
+      const string name;
+      int linenum;
+      const string where()
+      {
+        ostringstream os;
+        os << name << ":" << linenum;
+        return os.str();
+      }
+
+      void scanLine(string& line);
+      void scanStream(istream& in);
+    };
+
+    void CfgStreamParser::scanLine(string& line)
     {
       /* strip any leading whitespace */
       size_t start = line.find_first_not_of(" \t\n\r");
@@ -413,11 +473,13 @@ namespace df
       if (start == string::npos)
       {
         /* error: badly formatted line */
+        error_reporter.warn(where()) << "line formatting error\n";
         return;
       }
       if (line[start] != ':')
       {
         /* error: badly formatted line */
+        error_reporter.warn(where()) << "line formatting error\n";
         return;
       }
 
@@ -426,6 +488,7 @@ namespace df
       if (start == string::npos)
       {
         /* error: badly formatted line */
+        error_reporter.warn(where()) << "line formatting error\n";
         return;
       }
 
@@ -456,20 +519,22 @@ namespace df
       else
       {
         /* error: no value */
+        error_reporter.warn(where()) << "no value found\n";
         return;
       }
 
       /* store the value in option */
-      storePair(opts, true, false, option, value);
+      storePair(true, false, option, value);
     }
 
-    void scanFile(Options& opts, istream& in)
+    void CfgStreamParser::scanStream(istream& in)
     {
       do
       {
+        linenum++;
         string line;
         getline(in, line);
-        scanLine(opts, line);
+        scanLine(line);
       } while(!!in);
     }
 
@@ -483,15 +548,16 @@ namespace df
       }
     }
 
-    void parseConfigFile(Options& opts, const string& filename)
+    void parseConfigFile(Options& opts, const string& filename, ErrorReporter& error_reporter)
     {
       ifstream cfgstream(filename.c_str(), ifstream::in);
       if (!cfgstream)
       {
-        cerr << "Failed to open config file: `" << filename << "'" << endl;
-        exit(EXIT_FAILURE);
+        error_reporter.error(filename) << "Failed to open config file\n";
+        return;
       }
-      scanFile(opts, cfgstream);
+      CfgStreamParser csp(filename, opts, error_reporter);
+      csp.scanStream(cfgstream);
     }
 
   }

@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,7 @@ public:
   Void       setRefMatrixId(UInt sizeId, UInt listId, UInt u)                   { m_refMatrixId[sizeId][listId] = u;                         } //!< set reference matrix ID
   UInt       getRefMatrixId(UInt sizeId, UInt listId) const                     { return m_refMatrixId[sizeId][listId];                      } //!< get reference matrix ID
 
-  Int*       getScalingListDefaultAddress(UInt sizeId, UInt listId);                                                                           //!< get default matrix coefficient
+  const Int* getScalingListDefaultAddress(UInt sizeId, UInt listId);                                                                           //!< get default matrix coefficient
   Void       processDefaultMatrix(UInt sizeId, UInt listId);
 
   Void       setScalingListDC(UInt sizeId, UInt listId, UInt u)                 { m_scalingListDC[sizeId][listId] = u;                       } //!< set DC value
@@ -296,7 +296,6 @@ private:
   UInt m_initialCpbRemovalDelayLengthMinus1;
   UInt m_cpbRemovalDelayLengthMinus1;
   UInt m_dpbOutputDelayLengthMinus1;
-  UInt m_numDU;
   HrdSubLayerInfo m_HRD[MAX_TLAYER];
 
 public:
@@ -382,8 +381,6 @@ public:
   Void    setCbrFlag( Int layer, Int cpbcnt, Int nalOrVcl, Bool value )              { m_HRD[layer].cbrFlag[cpbcnt][nalOrVcl] = value;            }
   Bool    getCbrFlag( Int layer, Int cpbcnt, Int nalOrVcl ) const                    { return m_HRD[layer].cbrFlag[cpbcnt][nalOrVcl];             }
 
-  Void    setNumDU( UInt value )                                                     { m_numDU = value;                                           }
-  UInt    getNumDU( ) const                                                          { return m_numDU;                                            }
   Bool    getCpbDpbDelaysPresentFlag( ) const                      { return getNalHrdParametersPresentFlag() || getVclHrdParametersPresentFlag(); }
 };
 
@@ -718,6 +715,7 @@ public:
   const TimingInfo* getTimingInfo() const                                  { return &m_timingInfo;                          }
 };
 
+
 /// SPS class
 class TComSPS
 {
@@ -736,7 +734,7 @@ private:
   Int              m_log2DiffMaxMinCodingBlockSize;
   UInt             m_uiMaxCUWidth;
   UInt             m_uiMaxCUHeight;
-  UInt             m_uiMaxCUDepth;
+  UInt             m_uiMaxTotalCUDepth; ///< Total CU depth, relative to the smallest possible transform block size.
 
   Window           m_conformanceWindow;
 
@@ -756,7 +754,7 @@ private:
   Bool             m_useAMP;
 
   // Parameter
-  Int              m_uiBitDepth[MAX_NUM_CHANNEL_TYPE];
+  BitDepths        m_bitDepths;
   Int              m_qpBDOffset[MAX_NUM_CHANNEL_TYPE];
   Bool             m_useExtendedPrecision;
   Bool             m_useHighPrecisionPredictionWeighting;
@@ -765,7 +763,7 @@ private:
   Bool             m_useGolombRiceParameterAdaptation;
   Bool             m_alignCABACBeforeBypass;
   Bool             m_useResidualDPCM[NUMBER_OF_RDPCM_SIGNALLING_MODES];
-  UInt             m_uiPCMBitDepth[MAX_NUM_CHANNEL_TYPE];
+  Int              m_pcmBitDepths[MAX_NUM_CHANNEL_TYPE];
   Bool             m_bPCMFilterDisableFlag;
   Bool             m_disableIntraReferenceSmoothing;
 
@@ -845,8 +843,8 @@ public:
   UInt                   getMaxCUWidth() const                                                           { return  m_uiMaxCUWidth;                                              }
   Void                   setMaxCUHeight( UInt u )                                                        { m_uiMaxCUHeight = u;                                                 }
   UInt                   getMaxCUHeight() const                                                          { return  m_uiMaxCUHeight;                                             }
-  Void                   setMaxCUDepth( UInt u )                                                         { m_uiMaxCUDepth = u;                                                  }
-  UInt                   getMaxCUDepth() const                                                           { return  m_uiMaxCUDepth;                                              }
+  Void                   setMaxTotalCUDepth( UInt u )                                                    { m_uiMaxTotalCUDepth = u;                                             }
+  UInt                   getMaxTotalCUDepth() const                                                      { return  m_uiMaxTotalCUDepth;                                         }
   Void                   setUsePCM( Bool b )                                                             { m_usePCM = b;                                                        }
   Bool                   getUsePCM() const                                                               { return m_usePCM;                                                     }
   Void                   setPCMLog2MaxSize( UInt u )                                                     { m_pcmLog2MaxSize = u;                                                }
@@ -879,9 +877,16 @@ public:
   UInt                   getMaxTrSize() const                                                            { return  m_uiMaxTrSize;                                               }
 
   // Bit-depth
-  Int                    getBitDepth(ChannelType type) const                                             { return m_uiBitDepth[type];                                           }
-  Void                   setBitDepth(ChannelType type, Int u )                                           { m_uiBitDepth[type] = u;                                              }
-  Int                    getDifferentialLumaChromaBitDepth() const                                       { return Int(m_uiBitDepth[CHANNEL_TYPE_LUMA]) - Int(m_uiBitDepth[CHANNEL_TYPE_CHROMA]); }
+  Int                    getBitDepth(ChannelType type) const                                             { return m_bitDepths.recon[type];                                      }
+  Void                   setBitDepth(ChannelType type, Int u )                                           { m_bitDepths.recon[type] = u;                                         }
+#if O0043_BEST_EFFORT_DECODING
+  Int                    getStreamBitDepth(ChannelType type) const                                       { return m_bitDepths.stream[type];                                     }
+  Void                   setStreamBitDepth(ChannelType type, Int u )                                     { m_bitDepths.stream[type] = u;                                        }
+#endif
+  const BitDepths&       getBitDepths() const                                                            { return m_bitDepths;                                                  }
+  Int                    getMaxLog2TrDynamicRange(ChannelType channelType) const                         { return getUseExtendedPrecision() ? std::max<Int>(15, Int(m_bitDepths.recon[channelType] + 6)) : 15; }
+
+  Int                    getDifferentialLumaChromaBitDepth() const                                       { return Int(m_bitDepths.recon[CHANNEL_TYPE_LUMA]) - Int(m_bitDepths.recon[CHANNEL_TYPE_CHROMA]); }
   Int                    getQpBDOffset(ChannelType type) const                                           { return m_qpBDOffset[type];                                           }
   Void                   setQpBDOffset(ChannelType type, Int i)                                          { m_qpBDOffset[type] = i;                                              }
   Bool                   getUseExtendedPrecision() const                                                 { return m_useExtendedPrecision;                                       }
@@ -912,8 +917,8 @@ public:
 
   Bool                   getTemporalIdNestingFlag() const                                                { return m_bTemporalIdNestingFlag;                                     }
   Void                   setTemporalIdNestingFlag( Bool bValue )                                         { m_bTemporalIdNestingFlag = bValue;                                   }
-  UInt                   getPCMBitDepth(ChannelType type) const                                          { return m_uiPCMBitDepth[type];                                        }
-  Void                   setPCMBitDepth(ChannelType type, UInt u)                                        { m_uiPCMBitDepth[type] = u;                                           }
+  UInt                   getPCMBitDepth(ChannelType type) const                                          { return m_pcmBitDepths[type];                                         }
+  Void                   setPCMBitDepth(ChannelType type, UInt u)                                        { m_pcmBitDepths[type] = u;                                            }
   Void                   setPCMFilterDisableFlag( Bool bValue )                                          { m_bPCMFilterDisableFlag = bValue;                                    }
   Bool                   getPCMFilterDisableFlag() const                                                 { return m_bPCMFilterDisableFlag;                                      }
   Void                   setDisableIntraReferenceSmoothing(Bool bValue)                                  { m_disableIntraReferenceSmoothing=bValue;                             }
@@ -938,8 +943,7 @@ public:
   Void                   setVuiParametersPresentFlag(Bool b)                                             { m_vuiParametersPresentFlag = b;                                      }
   TComVUI*               getVuiParameters()                                                              { return &m_vuiParameters;                                             }
   const TComVUI*         getVuiParameters() const                                                        { return &m_vuiParameters;                                             }
-  Void                   setHrdParameters( UInt frameRate, UInt numDU, UInt bitRate, Bool randomAccess );
-
+  Void                   setHrdParameters( UInt frameRate, Bool useSubCpbParams, UInt bitRate, Bool randomAccess );
   const TComPTL*         getPTL() const                                                                  { return &m_pcPTL;                                                     }
   TComPTL*               getPTL()                                                                        { return &m_pcPTL;                                                     }
 
@@ -989,8 +993,8 @@ private:
 
   // Chroma QP Adjustments
   Int              m_MaxCuChromaQpAdjDepth;
-  Int              m_ChromaQpAdjTableSize;
-  ChromaQpAdj      m_ChromaQpAdjTable[7];
+  Int              m_ChromaQpAdjTableSize; // size (excludes the null entry used in the following array).
+  ChromaQpAdj      m_ChromaQpAdjTableIncludingNullEntry[1+MAX_QP_OFFSET_LIST_SIZE]; //!< Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0, and entries [cu_chroma_qp_offset_idx+1...] otherwise
 
   Int              m_chromaCbQpOffset;
   Int              m_chromaCrQpOffset;
@@ -1079,12 +1083,19 @@ public:
   UInt                   getMaxCuChromaQpAdjDepth () const                                { return m_MaxCuChromaQpAdjDepth;               }
   Void                   clearChromaQpAdjTable()                                          { m_ChromaQpAdjTableSize = 0;                   }
   Int                    getChromaQpAdjTableSize() const                                  { return m_ChromaQpAdjTableSize;                }
-  const ChromaQpAdj&     getChromaQpAdjTableAt( Int idx ) const                           { return m_ChromaQpAdjTable[idx];               }
-  Void                   setChromaQpAdjTableAt( Int idx, Int cbOffset, Int crOffset )
+
+  const ChromaQpAdj&     getChromaQpAdjTableAt( Int cuChromaQpOffsetIdxPlus1 ) const
   {
-    m_ChromaQpAdjTable[idx].u.comp.CbOffset = cbOffset;
-    m_ChromaQpAdjTable[idx].u.comp.CrOffset = crOffset;
-    m_ChromaQpAdjTableSize = max(m_ChromaQpAdjTableSize, idx);
+    assert(cuChromaQpOffsetIdxPlus1 < m_ChromaQpAdjTableSize+1);
+    return m_ChromaQpAdjTableIncludingNullEntry[cuChromaQpOffsetIdxPlus1]; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0, and entries [cu_chroma_qp_offset_idx+1...] otherwise
+  }
+
+  Void                   setChromaQpAdjTableAt( Int cuChromaQpOffsetIdxPlus1, Int cbOffset, Int crOffset )
+  {
+    assert (cuChromaQpOffsetIdxPlus1 != 0 && cuChromaQpOffsetIdxPlus1 <= MAX_QP_OFFSET_LIST_SIZE);
+    m_ChromaQpAdjTableIncludingNullEntry[cuChromaQpOffsetIdxPlus1].u.comp.CbOffset = cbOffset; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0, and entries [cu_chroma_qp_offset_idx+1...] otherwise
+    m_ChromaQpAdjTableIncludingNullEntry[cuChromaQpOffsetIdxPlus1].u.comp.CrOffset = crOffset;
+    m_ChromaQpAdjTableSize = max(m_ChromaQpAdjTableSize, cuChromaQpOffsetIdxPlus1);
   }
 
   Void                   setNumRefIdxL0DefaultActive(UInt ui)                             { m_numRefIdxL0DefaultActive=ui;                }
@@ -1200,7 +1211,6 @@ private:
   Int                        m_iLastIDR;
   Int                        m_iAssociatedIRAP;
   NalUnitType                m_iAssociatedIRAPType;
-  static Int                 m_prevTid0POC;
   TComReferencePictureSet*   m_pcRPS;
   TComReferencePictureSet    m_LocalRPS;
   Int                        m_iBDidx;
@@ -1238,9 +1248,6 @@ private:
   const TComSPS*             m_pcSPS;
   const TComPPS*             m_pcPPS;
   TComPic*                   m_pcPic;
-#if ADAPTIVE_QP_SELECTION
-  TComTrQuant*               m_pcTrQuant;
-#endif
   Bool                       m_colFromL0Flag;  // collocated picture from List0 flag
 
   Bool                       m_noOutputPriorPicsFlag;
@@ -1301,12 +1308,6 @@ public:
   Void                        setPPS( const TComPPS* pcPPS )                         { m_pcPPS = pcPPS; m_iPPSId = (pcPPS) ? pcPPS->getPPSId() : -1; }
   const TComPPS*              getPPS() const                                         { return m_pcPPS;                                               }
 
-#if ADAPTIVE_QP_SELECTION
-  Void                        setTrQuant( TComTrQuant* pcTrQuant )                   { m_pcTrQuant = pcTrQuant;                                      }
-  TComTrQuant*                getTrQuant()                                           { return m_pcTrQuant;                                           }
-  const TComTrQuant*          getTrQuant() const                                     { return m_pcTrQuant;                                           }
-#endif
-
   Void                        setPPSId( Int PPSId )                                  { m_iPPSId = PPSId;                                             }
   Int                         getPPSId() const                                       { return m_iPPSId;                                              }
   Void                        setPicOutputFlag( Bool b   )                           { m_PicOutputFlag = b;                                          }
@@ -1319,7 +1320,6 @@ public:
 
   Void                        setRPSidx( Int iBDidx )                                { m_iBDidx = iBDidx;                                            }
   Int                         getRPSidx() const                                      { return m_iBDidx;                                              }
-  Int                         getPrevTid0POC() const                                 { return m_prevTid0POC;                                         }
   TComRefPicListModification* getRefPicListModification()                            { return &m_RefPicListModification;                             }
   Void                        setLastIDR(Int iIDRPOC)                                { m_iLastIDR = iIDRPOC;                                         }
   Int                         getLastIDR() const                                     { return m_iLastIDR;                                            }
@@ -1360,7 +1360,7 @@ public:
   Void                        setReferenced(Bool b)                                  { m_bRefenced = b;                                              }
   Bool                        isReferenced() const                                   { return m_bRefenced;                                           }
   Bool                        isReferenceNalu() const                                { return ((getNalUnitType() <= NAL_UNIT_RESERVED_VCL_R15) && (getNalUnitType()%2 != 0)) || ((getNalUnitType() >= NAL_UNIT_CODED_SLICE_BLA_W_LP) && (getNalUnitType() <= NAL_UNIT_RESERVED_IRAP_VCL23) ); }
-  Void                        setPOC( Int i )                                        { m_iPOC              = i; if ((getTLayer()==0) && (isReferenceNalu() && (getNalUnitType()!=NAL_UNIT_CODED_SLICE_RASL_R)&& (getNalUnitType()!=NAL_UNIT_CODED_SLICE_RADL_R))) {m_prevTid0POC=i;} }
+  Void                        setPOC( Int i )                                        { m_iPOC              = i; }
   Void                        setNalUnitType( NalUnitType e )                        { m_eNalUnitType      = e;                                      }
   NalUnitType                 getNalUnitType() const                                 { return m_eNalUnitType;                                        }
   Bool                        getRapPicFlag() const;

@@ -110,9 +110,9 @@ endif # USE_X265
 ifdef USE_JCTVC
 JCTVC_OBJS=$(addprefix jctvc/TLibEncoder/, SyntaxElementWriter.o TEncSbac.o \
 TEncBinCoderCABACCounter.o TEncGOP.o\
-TEncSampleAdaptiveOffset.o TEncBinCoderCABAC.o TEncAnalyze.o\
+TEncSampleAdaptiveOffset.o TEncBinCoderCABAC.o\
 TEncEntropy.o TEncTop.o SEIwrite.o TEncPic.o TEncRateCtrl.o\
-WeightPredAnalysis.o TEncSlice.o TEncCu.o NALwrite.o TEncCavlc.o\
+WeightPredAnalysis.o TEncSlice.o TEncCu.o NALwrite.o SEIEncoder.o TEncCavlc.o\
 TEncSearch.o TEncPreanalyzer.o)
 JCTVC_OBJS+=jctvc/TLibVideoIO/TVideoIOYuv.o
 JCTVC_OBJS+=$(addprefix jctvc/TLibCommon/, TComWeightPrediction.o TComLoopFilter.o\

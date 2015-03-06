@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -91,9 +91,10 @@ public:
   Void          create            (const Int iPicWidth,
                                    const Int iPicHeight,
                                    const ChromaFormat chromaFormatIDC,
-                                   const UInt uiMaxCUWidth,
-                                   const UInt uiMaxCUHeight,
-                                   const UInt uiMaxCUDepth );
+                                   const UInt uiMaxCUWidth,  ///< used for generating offsets to CUs. Can use iPicWidth if no offsets are required
+                                   const UInt uiMaxCUHeight, ///< used for generating offsets to CUs. Can use iPicHeight if no offsets are required
+                                   const UInt uiMaxCUDepth,  ///< used for generating offsets to CUs. Can use 0 if no offsets are required
+                                   const Bool bUseMargin);   ///< if true, then a margin of uiMaxCUWidth+16 and uiMaxCUHeight+16 is created around the image.
 
   Void          destroy           ();
 
@@ -149,7 +150,7 @@ public:
   Void          extendPicBorder   ();
 
   //  Dump picture
-  Void          dump              (const Char* pFileName, Bool bAdd = false) const ;
+  Void          dump              (const Char* pFileName, const BitDepths &bitDepths, Bool bAdd = false) const ;
 
   // Set border extension flag
   Void          setBorderExtension(Bool b) { m_bIsBorderExtended = b; }
@@ -157,10 +158,10 @@ public:
 
 
 // These functions now return the length of the digest strings.
-UInt calcChecksum(const TComPicYuv& pic, TComDigest &digest);
-UInt calcCRC     (const TComPicYuv& pic, TComDigest &digest);
-UInt calcMD5     (const TComPicYuv& pic, TComDigest &digest);
-std::string digestToString(const TComDigest &digest, Int numChar);
+UInt calcChecksum(const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bitDepths);
+UInt calcCRC     (const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bitDepths);
+UInt calcMD5     (const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bitDepths);
+std::string hashToString(const TComPictureHash &digest, Int numChar);
 //! \}
 
 #endif // __TCOMPICYUV__

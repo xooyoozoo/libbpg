@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,9 +37,6 @@
 
 #include "CommonDef.h"
 #include "SEI.h"
-
-//Table D-7 Meaning of camera iso sensitivity indicator and exposure index rating indicator
-Int  Table_exp_indicator[32] = {0, 10, 12, 16, 20, 25, 32, 40, 50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200, 4000, 5000, 6400, 8000, -1};
 
 SEIMessages getSeisByType(SEIMessages &seiList, SEI::PayloadType seiType)
 {
@@ -85,6 +82,36 @@ Void deleteSEIs (SEIMessages &seiList)
   seiList.clear();
 }
 
+void SEIBufferingPeriod::copyTo (SEIBufferingPeriod& target)
+{
+  target.m_bpSeqParameterSetId = m_bpSeqParameterSetId;
+  target.m_rapCpbParamsPresentFlag = m_rapCpbParamsPresentFlag;
+  target.m_cpbDelayOffset = m_cpbDelayOffset;
+  target.m_dpbDelayOffset = m_dpbDelayOffset;
+  target.m_concatenationFlag = m_concatenationFlag;
+  target.m_auCpbRemovalDelayDelta = m_auCpbRemovalDelayDelta;
+  ::memcpy(target.m_initialCpbRemovalDelay, m_initialCpbRemovalDelay, sizeof(m_initialCpbRemovalDelay));
+  ::memcpy(target.m_initialCpbRemovalDelayOffset, m_initialCpbRemovalDelayOffset, sizeof(m_initialCpbRemovalDelayOffset));
+  ::memcpy(target.m_initialAltCpbRemovalDelay, m_initialAltCpbRemovalDelay, sizeof(m_initialAltCpbRemovalDelay));
+  ::memcpy(target.m_initialAltCpbRemovalDelayOffset, m_initialAltCpbRemovalDelayOffset, sizeof(m_initialAltCpbRemovalDelayOffset));
+}
+
+void SEIPictureTiming::copyTo (SEIPictureTiming& target)
+{
+  target.m_picStruct = m_picStruct;
+  target.m_sourceScanType = m_sourceScanType;
+  target.m_duplicateFlag = m_duplicateFlag;
+
+  target.m_auCpbRemovalDelay = m_auCpbRemovalDelay;
+  target.m_picDpbOutputDelay = m_picDpbOutputDelay;
+  target.m_picDpbOutputDuDelay = m_picDpbOutputDuDelay;
+  target.m_numDecodingUnitsMinus1 = m_numDecodingUnitsMinus1;
+  target.m_duCommonCpbRemovalDelayFlag = m_duCommonCpbRemovalDelayFlag;
+  target.m_duCommonCpbRemovalDelayMinus1 = m_duCommonCpbRemovalDelayMinus1;
+
+  target.m_numNalusInDuMinus1 = m_numNalusInDuMinus1;
+  target.m_duCpbRemovalDelayMinus1 = m_duCpbRemovalDelayMinus1;
+}
 
 // Static member
 const Char *SEI::getSEIMessageString(SEI::PayloadType payloadType)

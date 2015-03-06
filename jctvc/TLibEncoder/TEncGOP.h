@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,7 @@
 #include "TEncCavlc.h"
 #include "TEncSbac.h"
 #include "SEIwrite.h"
+#include "SEIEncoder.h"
 
 #include "TEncAnalyze.h"
 #include "TEncRateCtrl.h"
@@ -69,7 +70,25 @@ class TEncTop;
 
 class TEncGOP
 {
+  class DUData
+  {
+  public:
+    DUData()
+    :accumBitsDU(0)
+    ,accumNalsDU(0) {};
+
+    Int accumBitsDU;
+    Int accumNalsDU;
+  };
+
 private:
+
+  TEncAnalyze             m_gcAnalyzeAll;
+  TEncAnalyze             m_gcAnalyzeI;
+  TEncAnalyze             m_gcAnalyzeP;
+  TEncAnalyze             m_gcAnalyzeB;
+
+  TEncAnalyze             m_gcAnalyzeAll_in;
   //  Data
   Bool                    m_bLongtermTestPictureHasBeenCoded;
   Bool                    m_bLongtermTestPictureHasBeenCoded2;
@@ -113,14 +132,13 @@ private:
   std::vector<Int> m_vRVM_RP;
   UInt                    m_lastBPSEI;
   UInt                    m_totalCoded;
-  UInt                    m_cpbRemovalDelay;
-  UInt                    m_tl0Idx;
-  UInt                    m_rapIdx;
   Bool                    m_activeParameterSetSEIPresentInAU;
   Bool                    m_bufferingPeriodSEIPresentInAU;
   Bool                    m_pictureTimingSEIPresentInAU;
   Bool                    m_nestedBufferingPeriodSEIPresentInAU;
   Bool                    m_nestedPictureTimingSEIPresentInAU;
+  SEIEncoder              m_seiEncoder;
+
 public:
   TEncGOP();
   virtual ~TEncGOP();
@@ -138,7 +156,7 @@ public:
 
   TComList<TComPic*>*   getListPic()      { return m_pcListPic; }
 
-  Void  printOutSummary      ( UInt uiNumAllPicCoded, Bool isField, const Bool printMSEBasedSNR, const Bool printSequenceMSE );
+  Void  printOutSummary      ( UInt uiNumAllPicCoded, Bool isField, const Bool printMSEBasedSNR, const Bool printSequenceMSE, const BitDepths &bitDepths );
   Void  preLoopFilterPicAll  ( TComPic* pcPic, UInt64& ruiDist );
 
   TEncSlice*  getSliceEncoder()   { return m_pcSliceEncoder; }
@@ -153,26 +171,37 @@ protected:
   Void  xInitGOP          ( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rcListPic, TComList<TComPicYuv*>& rcListPicYuvRecOut, Bool isField );
   Void  xGetBuffer        ( TComList<TComPic*>& rcListPic, TComList<TComPicYuv*>& rcListPicYuvRecOut, Int iNumPicRcvd, Int iTimeOffset, TComPic*& rpcPic, TComPicYuv*& rpcPicYuvRecOut, Int pocCurr, Bool isField );
 
+  Void  xCalculateAddPSNRs         ( const Bool isField, const Bool isFieldTopFieldFirst, const Int iGOPid, TComPic* pcPic, const AccessUnit&accessUnit, TComList<TComPic*> &rcListPic, Double dEncTime, const InputColourSpaceConversion snr_conversion, const Bool printFrameMSE );
   Void  xCalculateAddPSNR          ( TComPic* pcPic, TComPicYuv* pcPicD, const AccessUnit&, Double dEncTime, const InputColourSpaceConversion snr_conversion, const Bool printFrameMSE );
   Void  xCalculateInterlacedAddPSNR( TComPic* pcPicOrgFirstField, TComPic* pcPicOrgSecondField,
                                      TComPicYuv* pcPicRecFirstField, TComPicYuv* pcPicRecSecondField,
                                      const AccessUnit& accessUnit, Double dEncTime, const InputColourSpaceConversion snr_conversion, const Bool printFrameMSE );
 
-  UInt64 xFindDistortionFrame (TComPicYuv* pcPic0, TComPicYuv* pcPic1);
+  UInt64 xFindDistortionFrame (TComPicYuv* pcPic0, TComPicYuv* pcPic1, const BitDepths &bitDepths);
 
   Double xCalculateRVM();
 
-  SEIActiveParameterSets*           xCreateSEIActiveParameterSets (const TComSPS *sps);
-  SEIFramePacking*                  xCreateSEIFramePacking();
-  SEISegmentedRectFramePacking*     xCreateSEISegmentedRectFramePacking();
-  SEIDisplayOrientation*            xCreateSEIDisplayOrientation();
-  SEIToneMappingInfo*               xCreateSEIToneMappingInfo();
-  SEITempMotionConstrainedTileSets* xCreateSEITempMotionConstrainedTileSets (const TComPPS *pps);
-  SEIKneeFunctionInfo*              xCreateSEIKneeFunctionInfo();
-  SEIChromaSamplingFilterHint*      xCreateSEIChromaSamplingFilterHint(Bool bChromaLocInfoPresent, Int iHorFilterIndex, Int iVerFilterIdc);
+  Void xCreateIRAPLeadingSEIMessages (SEIMessages& seiMessages, const TComSPS *sps, const TComPPS *pps);
+  Void xCreatePerPictureSEIMessages (Int picInGOP, SEIMessages& seiMessages, SEIMessages& nestedSeiMessages, TComSlice *slice);
+  Void xCreatePictureTimingSEI  (Int IRAPGOPid, SEIMessages& seiMessages, SEIMessages& nestedSeiMessages, SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, TComSlice *slice, Bool isField, std::deque<DUData> &duData);
+  Void xUpdateDuData(AccessUnit &testAU, std::deque<DUData> &duData);
+  Void xUpdateTimingSEI(SEIPictureTiming *pictureTimingSEI, std::deque<DUData> &duData, const TComSPS *sps);
+  Void xUpdateDuInfoSEI(SEIMessages &duInfoSeiMessages, SEIPictureTiming *pictureTimingSEI);
 
-  Void xCreateLeadingSEIMessages (/*SEIMessages seiMessages,*/ AccessUnit &accessUnit, const TComSPS *sps, const TComPPS *pps);
-  Int xGetFirstSeiLocation (AccessUnit &accessUnit);
+  Void xCreateScalableNestingSEI (SEIMessages& seiMessages, SEIMessages& nestedSeiMessages);
+  Void xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, Int temporalId, const TComSPS *sps);
+  Void xWriteSEISeparately (NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, Int temporalId, const TComSPS *sps);
+  Void xClearSEIs(SEIMessages& seiMessages, Bool deleteMessages);
+  Void xWriteLeadingSEIOrdered (SEIMessages& seiMessages, SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps, Bool testWrite);
+  Void xWriteLeadingSEIMessages  (SEIMessages& seiMessages, SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps, std::deque<DUData> &duData);
+  Void xWriteTrailingSEIMessages (SEIMessages& seiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps);
+  Void xWriteDuSEIMessages       (SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps, std::deque<DUData> &duData);
+
+  Int xWriteVPS (AccessUnit &accessUnit, const TComVPS *vps);
+  Int xWriteSPS (AccessUnit &accessUnit, const TComSPS *sps);
+  Int xWritePPS (AccessUnit &accessUnit, const TComPPS *pps);
+  Int xWriteParameterSets (AccessUnit &accessUnit, TComSlice *slice);
+
   Void xResetNonNestedSEIPresentFlags()
   {
     m_activeParameterSetSEIPresentInAU = false;

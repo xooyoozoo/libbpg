@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -233,7 +233,7 @@ Void TComTrQuant::clearSliceARLCnt()
  *  \param uiTrSize transform size (uiTrSize x uiTrSize)
  *  \param uiMode is Intra Prediction mode used in Mode-Dependent DCT/DST only
  */
-Void xTr(Int bitDepth, Pel *block, TCoeff *coeff, UInt uiStride, UInt uiTrSize, Bool useDST, const Int maxTrDynamicRange)
+Void xTr(Int bitDepth, Pel *block, TCoeff *coeff, UInt uiStride, UInt uiTrSize, Bool useDST, const Int maxLog2TrDynamicRange)
 {
   UInt i,j,k;
   TCoeff iSum;
@@ -262,9 +262,9 @@ Void xTr(Int bitDepth, Pel *block, TCoeff *coeff, UInt uiStride, UInt uiTrSize, 
     assert(0);
   }
 
-  static const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
 
-  const Int shift_1st = (uiLog2TrSize +  bitDepth + TRANSFORM_MATRIX_SHIFT) - maxTrDynamicRange;
+  const Int shift_1st = (uiLog2TrSize +  bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
   const Int shift_2nd = uiLog2TrSize + TRANSFORM_MATRIX_SHIFT;
   const Int add_1st = (shift_1st>0) ? (1<<(shift_1st-1)) : 0;
   const Int add_2nd = 1<<(shift_2nd-1);
@@ -306,7 +306,7 @@ Void xTr(Int bitDepth, Pel *block, TCoeff *coeff, UInt uiStride, UInt uiTrSize, 
  *  \param uiTrSize transform size (uiTrSize x uiTrSize)
  *  \param uiMode is Intra Prediction mode used in Mode-Dependent DCT/DST only
  */
-Void xITr(Int bitDepth, TCoeff *coeff, Pel *block, UInt uiStride, UInt uiTrSize, Bool useDST, const Int maxTrDynamicRange)
+Void xITr(Int bitDepth, TCoeff *coeff, Pel *block, UInt uiStride, UInt uiTrSize, Bool useDST, const Int maxLog2TrDynamicRange)
 {
   UInt i,j,k;
   TCoeff iSum;
@@ -334,12 +334,12 @@ Void xITr(Int bitDepth, TCoeff *coeff, Pel *block, UInt uiStride, UInt uiTrSize,
     assert(0);
   }
 
-  static const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
 
   const Int shift_1st = TRANSFORM_MATRIX_SHIFT + 1; //1 has been added to shift_1st at the expense of shift_2nd
-  const Int shift_2nd = (TRANSFORM_MATRIX_SHIFT + maxTrDynamicRange - 1) - bitDepth;
-  const TCoeff clipMinimum = -(1 << maxTrDynamicRange);
-  const TCoeff clipMaximum =  (1 << maxTrDynamicRange) - 1;
+  const Int shift_2nd = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
+  const TCoeff clipMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff clipMaximum =  (1 << maxLog2TrDynamicRange) - 1;
   assert(shift_2nd>=0);
   const Int add_1st = 1<<(shift_1st-1);
   const Int add_2nd = (shift_2nd>0) ? (1<<(shift_2nd-1)) : 0;
@@ -383,6 +383,7 @@ Void xITr(Int bitDepth, TCoeff *coeff, Pel *block, UInt uiStride, UInt uiTrSize,
  *  \param src   input data (residual)
  *  \param dst   output data (transform coefficients)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
  */
 Void partialButterfly4(TCoeff *src, TCoeff *dst, Int shift, Int line)
 {
@@ -468,6 +469,9 @@ Void fastInverseDst(TCoeff *tmp, TCoeff *block, Int shift, const TCoeff outputMi
  *  \param src   input data (transform coefficients)
  *  \param dst   output data (residual)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
  */
 Void partialButterflyInverse4(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
@@ -498,6 +502,7 @@ Void partialButterflyInverse4(TCoeff *src, TCoeff *dst, Int shift, Int line, con
  *  \param src   input data (residual)
  *  \param dst   output data (transform coefficients)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
  */
 Void partialButterfly8(TCoeff *src, TCoeff *dst, Int shift, Int line)
 {
@@ -539,6 +544,9 @@ Void partialButterfly8(TCoeff *src, TCoeff *dst, Int shift, Int line)
  *  \param src   input data (transform coefficients)
  *  \param dst   output data (residual)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
  */
 Void partialButterflyInverse8(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
@@ -580,6 +588,7 @@ Void partialButterflyInverse8(TCoeff *src, TCoeff *dst, Int shift, Int line, con
  *  \param src   input data (residual)
  *  \param dst   output data (transform coefficients)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
  */
 Void partialButterfly16(TCoeff *src, TCoeff *dst, Int shift, Int line)
 {
@@ -635,9 +644,12 @@ Void partialButterfly16(TCoeff *src, TCoeff *dst, Int shift, Int line)
 }
 
 /** 16x16 inverse transform implemented using partial butterfly structure (1D)
- *  \param src   input data (transform coefficients)
- *  \param dst   output data (residual)
- *  \param shift specifies right shift after 1D transform
+ *  \param src            input data (transform coefficients)
+ *  \param dst            output data (residual)
+ *  \param shift          specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
  */
 Void partialButterflyInverse16(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
@@ -692,6 +704,7 @@ Void partialButterflyInverse16(TCoeff *src, TCoeff *dst, Int shift, Int line, co
  *  \param src   input data (residual)
  *  \param dst   output data (transform coefficients)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
  */
 Void partialButterfly32(TCoeff *src, TCoeff *dst, Int shift, Int line)
 {
@@ -765,6 +778,9 @@ Void partialButterfly32(TCoeff *src, TCoeff *dst, Int shift, Int line)
  *  \param src   input data (transform coefficients)
  *  \param dst   output data (residual)
  *  \param shift specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
  */
 Void partialButterflyInverse32(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
@@ -832,16 +848,20 @@ Void partialButterflyInverse32(TCoeff *src, TCoeff *dst, Int shift, Int line, co
 }
 
 /** MxN forward transform (2D)
-*  \param block input data (residual)
-*  \param coeff output data (transform coefficients)
-*  \param iWidth input data (width of transform)
-*  \param iHeight input data (height of transform)
-*/
-Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight, Bool useDST, const Int maxTrDynamicRange)
-{
-  static const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
+*  \param bitDepth              [in]  bit depth
+*  \param block                 [in]  residual block
+*  \param coeff                 [out] transform coefficients
+*  \param iWidth                [in]  width of transform
+*  \param iHeight               [in]  height of transform
+*  \param useDST                [in]
+*  \param maxLog2TrDynamicRange [in]
 
-  const Int shift_1st = ((g_aucConvertToBit[iWidth] + 2) +  bitDepth + TRANSFORM_MATRIX_SHIFT) - maxTrDynamicRange;
+*/
+Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight, Bool useDST, const Int maxLog2TrDynamicRange)
+{
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
+
+  const Int shift_1st = ((g_aucConvertToBit[iWidth] + 2) +  bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
   const Int shift_2nd = (g_aucConvertToBit[iHeight] + 2) + TRANSFORM_MATRIX_SHIFT;
 
   assert(shift_1st >= 0);
@@ -896,19 +916,22 @@ Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight,
 
 
 /** MxN inverse transform (2D)
-*  \param coeff input data (transform coefficients)
-*  \param block output data (residual)
-*  \param iWidth input data (width of transform)
-*  \param iHeight input data (height of transform)
+*  \param bitDepth              [in]  bit depth
+*  \param coeff                 [in]  transform coefficients
+*  \param block                 [out] residual block
+*  \param iWidth                [in]  width of transform
+*  \param iHeight               [in]  height of transform
+*  \param useDST                [in]
+*  \param maxLog2TrDynamicRange [in]
 */
-Void xITrMxN(Int bitDepth, TCoeff *coeff, TCoeff *block, Int iWidth, Int iHeight, Bool useDST, const Int maxTrDynamicRange)
+Void xITrMxN(Int bitDepth, TCoeff *coeff, TCoeff *block, Int iWidth, Int iHeight, Bool useDST, const Int maxLog2TrDynamicRange)
 {
-  static const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
 
   Int shift_1st = TRANSFORM_MATRIX_SHIFT + 1; //1 has been added to shift_1st at the expense of shift_2nd
-  Int shift_2nd = (TRANSFORM_MATRIX_SHIFT + maxTrDynamicRange - 1) - bitDepth;
-  const TCoeff clipMinimum = -(1 << maxTrDynamicRange);
-  const TCoeff clipMaximum =  (1 << maxTrDynamicRange) - 1;
+  Int shift_2nd = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
+  const TCoeff clipMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff clipMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
   assert(shift_1st >= 0);
   assert(shift_2nd >= 0);
@@ -965,14 +988,14 @@ Void xITrMxN(Int bitDepth, TCoeff *coeff, TCoeff *block, Int iWidth, Int iHeight
 
 
 // To minimize the distortion only. No rate is considered.
-Void TComTrQuant::signBitHidingHDQ( const ComponentID compID, TCoeff* pQCoef, TCoeff* pCoef, TCoeff* deltaU, const TUEntropyCodingParameters &codingParameters )
+Void TComTrQuant::signBitHidingHDQ( const ComponentID compID, TCoeff* pQCoef, TCoeff* pCoef, TCoeff* deltaU, const TUEntropyCodingParameters &codingParameters, const Int maxLog2TrDynamicRange )
 {
   const UInt width     = codingParameters.widthInGroups  << MLS_CG_LOG2_WIDTH;
   const UInt height    = codingParameters.heightInGroups << MLS_CG_LOG2_HEIGHT;
   const UInt groupSize = 1 << MLS_CG_SIZE;
 
-  const TCoeff entropyCodingMinimum = -(1 << g_maxTrDynamicRange[toChannelType(compID)]);
-  const TCoeff entropyCodingMaximum =  (1 << g_maxTrDynamicRange[toChannelType(compID)]) - 1;
+  const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
   Int lastCG = -1;
   Int absSum = 0 ;
@@ -1115,6 +1138,7 @@ Void TComTrQuant::xQuant(       TComTU       &rTu,
   const UInt uiHeight       = rect.height;
   TComDataCU* pcCU          = rTu.getCU();
   const UInt uiAbsPartIdx   = rTu.GetAbsPartIdxTU();
+  const Int channelBitDepth = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
 
   TCoeff* piCoef    = pSrc;
   TCoeff* piQCoef   = pDes;
@@ -1122,15 +1146,28 @@ Void TComTrQuant::xQuant(       TComTU       &rTu,
   TCoeff* piArlCCoef = pArlDes;
 #endif
 
-  const Bool useTransformSkip = pcCU->getTransformSkip(uiAbsPartIdx, compID);
+  const Bool useTransformSkip      = pcCU->getTransformSkip(uiAbsPartIdx, compID);
+  const Int  maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
 
   Bool useRDOQ = useTransformSkip ? m_useRDOQTS : m_useRDOQ;
   if ( useRDOQ && (isLuma(compID) || RDOQ_CHROMA) )
   {
+#if T0196_SELECTIVE_RDOQ
+    if ( !m_useSelectiveRDOQ || xNeedRDOQ( rTu, piCoef, compID, cQP ) )
+    {
+#endif
 #if ADAPTIVE_QP_SELECTION
-    xRateDistOptQuant( rTu, piCoef, pDes, pArlDes, uiAbsSum, compID, cQP );
+      xRateDistOptQuant( rTu, piCoef, pDes, pArlDes, uiAbsSum, compID, cQP );
 #else
-    xRateDistOptQuant( rTu, piCoef, pDes, uiAbsSum, compID, cQP );
+      xRateDistOptQuant( rTu, piCoef, pDes, uiAbsSum, compID, cQP );
+#endif
+#if T0196_SELECTIVE_RDOQ
+    }
+    else
+    {
+      memset( pDes, 0, sizeof( TCoeff ) * uiWidth *uiHeight );
+      uiAbsSum = 0;
+    }
 #endif
   }
   else
@@ -1138,8 +1175,8 @@ Void TComTrQuant::xQuant(       TComTU       &rTu,
     TUEntropyCodingParameters codingParameters;
     getTUEntropyCodingParameters(codingParameters, rTu, compID);
 
-    const TCoeff entropyCodingMinimum = -(1 << g_maxTrDynamicRange[toChannelType(compID)]);
-    const TCoeff entropyCodingMaximum =  (1 << g_maxTrDynamicRange[toChannelType(compID)]) - 1;
+    const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+    const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
     TCoeff deltaU[MAX_TU_SIZE * MAX_TU_SIZE];
 
@@ -1159,7 +1196,7 @@ Void TComTrQuant::xQuant(       TComTU       &rTu,
      */
 
     // Represents scaling through forward transform
-    Int iTransformShift = getTransformShift(toChannelType(compID), uiLog2TrSize);
+    Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
     if (useTransformSkip && pcCU->getSlice()->getSPS()->getUseExtendedPrecision())
     {
       iTransformShift = std::max<Int>(0, iTransformShift);
@@ -1209,12 +1246,70 @@ Void TComTrQuant::xQuant(       TComTU       &rTu,
     {
       if(uiAbsSum >= 2) //this prevents TUs with only one coefficient of value 1 from being tested
       {
-        signBitHidingHDQ( compID, piQCoef, piCoef, deltaU, codingParameters ) ;
+        signBitHidingHDQ( compID, piQCoef, piCoef, deltaU, codingParameters, maxLog2TrDynamicRange ) ;
       }
     }
   } //if RDOQ
   //return;
 }
+
+#if T0196_SELECTIVE_RDOQ
+Bool TComTrQuant::xNeedRDOQ( TComTU &rTu, TCoeff * pSrc, const ComponentID compID, const QpParam &cQP )
+{
+  const TComRectangle &rect = rTu.getRect(compID);
+  const UInt uiWidth        = rect.width;
+  const UInt uiHeight       = rect.height;
+  TComDataCU* pcCU          = rTu.getCU();
+  const UInt uiAbsPartIdx   = rTu.GetAbsPartIdxTU();
+  const Int channelBitDepth = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+
+  TCoeff* piCoef    = pSrc;
+
+  const Bool useTransformSkip      = pcCU->getTransformSkip(uiAbsPartIdx, compID);
+  const Int  maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+
+  const UInt uiLog2TrSize = rTu.GetEquivalentLog2TrSize(compID);
+
+  Int scalingListType = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+  assert(scalingListType < SCALING_LIST_NUM);
+  Int *piQuantCoeff = getQuantCoeff(scalingListType, cQP.rem, uiLog2TrSize-2);
+
+  const Bool enableScalingLists             = getUseScalingList(uiWidth, uiHeight, (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0));
+  const Int  defaultQuantisationCoefficient = g_quantScales[cQP.rem];
+
+  /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
+    * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
+    * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
+    * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
+    */
+
+  // Represents scaling through forward transform
+  Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
+  if (useTransformSkip && pcCU->getSlice()->getSPS()->getUseExtendedPrecision())
+  {
+    iTransformShift = std::max<Int>(0, iTransformShift);
+  }
+
+  const Int iQBits = QUANT_SHIFT + cQP.per + iTransformShift;
+  // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
+
+  // iAdd is different from the iAdd used in normal quantization
+  const Int iAdd   = (compID == COMPONENT_Y ? 171 : 256) << (iQBits-9);
+
+  for( Int uiBlockPos = 0; uiBlockPos < uiWidth*uiHeight; uiBlockPos++ )
+  {
+    const TCoeff iLevel   = piCoef[uiBlockPos];
+    const Int64  tmpLevel = (Int64)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
+    const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+
+    if ( quantisedMagnitude != 0 )
+    {
+      return true;
+    }
+  } // for n
+  return false;
+}
+#endif
 
 Void TComTrQuant::xDeQuant(       TComTU        &rTu,
                             const TCoeff       * pSrc,
@@ -1233,17 +1328,23 @@ Void TComTrQuant::xDeQuant(       TComTU        &rTu,
         TCoeff        *const piCoef             = pDes;
   const UInt                 uiLog2TrSize       = rTu.GetEquivalentLog2TrSize(compID);
   const UInt                 numSamplesInBlock  = uiWidth*uiHeight;
-  const TCoeff               transformMinimum   = -(1 << g_maxTrDynamicRange[toChannelType(compID)]);
-  const TCoeff               transformMaximum   =  (1 << g_maxTrDynamicRange[toChannelType(compID)]) - 1;
+  const Int                  maxLog2TrDynamicRange  = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const TCoeff               transformMinimum   = -(1 << maxLog2TrDynamicRange);
+  const TCoeff               transformMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
   const Bool                 enableScalingLists = getUseScalingList(uiWidth, uiHeight, (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0));
   const Int                  scalingListType    = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+#if O0043_BEST_EFFORT_DECODING
+  const Int                  channelBitDepth    = pcCU->getSlice()->getSPS()->getStreamBitDepth(toChannelType(compID));
+#else
+  const Int                  channelBitDepth    = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+#endif
 
   assert (scalingListType < SCALING_LIST_NUM);
   assert ( uiWidth <= m_uiMaxTrSize );
 
   // Represents scaling through forward transform
   const Bool bClipTransformShiftTo0 = (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0) && pcCU->getSlice()->getSPS()->getUseExtendedPrecision();
-  const Int  originalTransformShift = getTransformShift(toChannelType(compID), uiLog2TrSize);
+  const Int  originalTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
   const Int  iTransformShift        = bClipTransformShiftTo0 ? std::max<Int>(0, originalTransformShift) : originalTransformShift;
 
   const Int QP_per = cQP.per;
@@ -1257,7 +1358,7 @@ Void TComTrQuant::xDeQuant(       TComTU        &rTu,
     //iCoeffQ                         = ((Intermediate_Int(clipQCoef) * piDequantCoef[deQuantIdx]) + iAdd ) >> rightShift
     //(sizeof(Intermediate_Int) * 8)  =              inputBitDepth    +    dequantCoefBits                   - rightShift
     const UInt             dequantCoefBits     = 1 + IQUANT_SHIFT + SCALING_LIST_BITS;
-    const UInt             targetInputBitDepth = std::min<UInt>((g_maxTrDynamicRange[toChannelType(compID)] + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - dequantCoefBits));
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - dequantCoefBits));
 
     const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
@@ -1297,7 +1398,7 @@ Void TComTrQuant::xDeQuant(       TComTU        &rTu,
     //from the dequantisation equation:
     //iCoeffQ                         = Intermediate_Int((Int64(clipQCoef) * scale + iAdd) >> rightShift);
     //(sizeof(Intermediate_Int) * 8)  =                    inputBitDepth   + scaleBits      - rightShift
-    const UInt             targetInputBitDepth = std::min<UInt>((g_maxTrDynamicRange[toChannelType(compID)] + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
     const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
 
@@ -1332,6 +1433,9 @@ Void TComTrQuant::xDeQuant(       TComTU        &rTu,
 Void TComTrQuant::init(   UInt  uiMaxTrSize,
                           Bool  bUseRDOQ,
                           Bool  bUseRDOQTS,
+#if T0196_SELECTIVE_RDOQ
+                          Bool  useSelectiveRDOQ,
+#endif
                           Bool  bEnc,
                           Bool  useTransformSkipFast
 #if ADAPTIVE_QP_SELECTION
@@ -1343,6 +1447,9 @@ Void TComTrQuant::init(   UInt  uiMaxTrSize,
   m_bEnc         = bEnc;
   m_useRDOQ      = bUseRDOQ;
   m_useRDOQTS    = bUseRDOQTS;
+#if T0196_SELECTIVE_RDOQ
+  m_useSelectiveRDOQ = useSelectiveRDOQ;
+#endif
 #if ADAPTIVE_QP_SELECTION
   m_bUseAdaptQpSelect = bUseAdaptQpSelect;
 #endif
@@ -1409,7 +1516,8 @@ Void TComTrQuant::transformNxN(       TComTU        & rTu,
       }
       else
       {
-        xT( compID, rTu.useDST(compID), pcResidual, uiStride, m_plTempCoeff, uiWidth, uiHeight );
+        const Int channelBitDepth=pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+        xT( channelBitDepth, rTu.useDST(compID), pcResidual, uiStride, m_plTempCoeff, uiWidth, uiHeight, pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID)) );
       }
 
 #ifdef DEBUG_TRANSFORM_AND_QUANTISE
@@ -1539,7 +1647,12 @@ Void TComTrQuant::invTransformNxN(      TComTU        &rTu,
     }
     else
     {
-      xIT( compID, rTu.useDST(compID), m_plTempCoeff, pcResidual, uiStride, uiWidth, uiHeight );
+#if O0043_BEST_EFFORT_DECODING
+      const Int channelBitDepth = pcCU->getSlice()->getSPS()->getStreamBitDepth(toChannelType(compID));
+#else
+      const Int channelBitDepth = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+#endif
+      xIT( channelBitDepth, rTu.useDST(compID), m_plTempCoeff, pcResidual, uiStride, uiWidth, uiHeight, pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID)) );
 
 #if defined DEBUG_STRING
       if (psDebug)
@@ -1644,8 +1757,6 @@ Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel*
   const Bool rotateResidual = rTu.isNonTransformedResidualRotated(compID);
   const UInt uiSizeMinus1   = (uiWidth * uiHeight) - 1;
 
-  Pel reconstructedResi[MAX_TU_SIZE * MAX_TU_SIZE];
-
   UInt uiX = 0;
   UInt uiY = 0;
 
@@ -1653,8 +1764,6 @@ Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel*
         UInt &minorAxis             = (mode == RDPCM_VER) ? uiY      : uiX;
   const UInt  majorAxisLimit        = (mode == RDPCM_VER) ? uiWidth  : uiHeight;
   const UInt  minorAxisLimit        = (mode == RDPCM_VER) ? uiHeight : uiWidth;
-  static const TCoeff pelMin=(Int) std::numeric_limits<Pel>::min();
-  static const TCoeff pelMax=(Int) std::numeric_limits<Pel>::max();
 
   const Bool bUseHalfRoundingPoint  = (mode != RDPCM_OFF);
 
@@ -1674,7 +1783,7 @@ Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel*
       if ( bLossless )
       {
         pcCoeff[coefficientIndex] = encoderSideDelta;
-        reconstructedDelta        = encoderSideDelta;
+        reconstructedDelta        = (Pel) encoderSideDelta;
       }
       else
       {
@@ -1684,14 +1793,9 @@ Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel*
 
       uiAbsSum += abs(pcCoeff[coefficientIndex]);
 
-      if (mode == RDPCM_OFF)
-      {
-        reconstructedResi[sampleIndex] = reconstructedDelta;
-      }
-      else
+      if (mode != RDPCM_OFF)
       {
         accumulatorValue += reconstructedDelta;
-        reconstructedResi[sampleIndex] = (Pel) Clip3<TCoeff>(pelMin, pelMax, accumulatorValue);
       }
     }
   }
@@ -1711,7 +1815,9 @@ Void TComTrQuant::rdpcmNxN   ( TComTU& rTu, const ComponentID compID, Pel* pcRes
     const ChromaFormat chFmt = pcCU->getPic()->getPicYuvOrg()->getChromaFormat();
     const ChannelType chType = toChannelType(compID);
     const UInt uiChPredMode  = pcCU->getIntraDir( chType, uiAbsPartIdx );
-    const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && isChroma(compID)) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt)) : uiChPredMode;
+    const TComSPS *sps=pcCU->getSlice()->getSPS();
+    const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+    const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && isChroma(compID)) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt, partsPerMinCU)) : uiChPredMode;
     const UInt uiChFinalMode = ((chFmt == CHROMA_422)       && isChroma(compID)) ? g_chroma422IntraAngleMappingTable[uiChCodedMode] : uiChCodedMode;
 
     if (uiChFinalMode == VER_IDX || uiChFinalMode == HOR_IDX)
@@ -1781,7 +1887,9 @@ Void TComTrQuant::invRdpcmNxN( TComTU& rTu, const ComponentID compID, Pel* pcRes
       const ChromaFormat chFmt = pcCU->getPic()->getPicYuvRec()->getChromaFormat();
       const ChannelType chType = toChannelType(compID);
       const UInt uiChPredMode  = pcCU->getIntraDir( chType, uiAbsPartIdx );
-      const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && isChroma(compID)) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt)) : uiChPredMode;
+      const TComSPS *sps=pcCU->getSlice()->getSPS();
+      const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+      const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && isChroma(compID)) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt, partsPerMinCU)) : uiChPredMode;
       const UInt uiChFinalMode = ((chFmt == CHROMA_422)       && isChroma(compID)) ? g_chroma422IntraAngleMappingTable[uiChCodedMode] : uiChCodedMode;
 
       if (uiChFinalMode == VER_IDX || uiChFinalMode == HOR_IDX)
@@ -1794,8 +1902,8 @@ Void TComTrQuant::invRdpcmNxN( TComTU& rTu, const ComponentID compID, Pel* pcRes
       rdpcmMode = RDPCMMode(pcCU->getExplicitRdpcmMode( compID, uiAbsPartIdx ));
     }
 
-    static const TCoeff pelMin=(TCoeff) std::numeric_limits<Pel>::min();
-    static const TCoeff pelMax=(TCoeff) std::numeric_limits<Pel>::max();
+    const TCoeff pelMin=(TCoeff) std::numeric_limits<Pel>::min();
+    const TCoeff pelMax=(TCoeff) std::numeric_limits<Pel>::max();
     if (rdpcmMode == RDPCM_VER)
     {
       for( UInt uiX = 0; uiX < uiWidth; uiX++ )
@@ -1832,18 +1940,20 @@ Void TComTrQuant::invRdpcmNxN( TComTU& rTu, const ComponentID compID, Pel* pcRes
 // ------------------------------------------------------------------------------------------------
 
 /** Wrapper function between HM interface and core NxN forward transform (2D)
+ *  \param compID colour component ID
+ *  \param useDST
  *  \param piBlkResi input data (residual)
- *  \param psCoeff output data (transform coefficients)
  *  \param uiStride stride of input residual data
- *  \param iSize transform size (iSize x iSize)
- *  \param uiMode is Intra Prediction mode used in Mode-Dependent DCT/DST only
+ *  \param psCoeff output data (transform coefficients)
+ *  \param iWidth transform width
+ *  \param iHeight transform height
  */
-Void TComTrQuant::xT( const ComponentID compID, Bool useDST, Pel* piBlkResi, UInt uiStride, TCoeff* psCoeff, Int iWidth, Int iHeight )
+Void TComTrQuant::xT( const Int channelBitDepth, Bool useDST, Pel* piBlkResi, UInt uiStride, TCoeff* psCoeff, Int iWidth, Int iHeight, const Int maxLog2TrDynamicRange )
 {
 #if MATRIX_MULT
   if( iWidth == iHeight)
   {
-    xTr(g_bitDepth[toChannelType(compID)], piBlkResi, psCoeff, uiStride, (UInt)iWidth, useDST, g_maxTrDynamicRange[toChannelType(compID)]);
+    xTr(channelBitDepth, piBlkResi, psCoeff, uiStride, (UInt)iWidth, useDST, maxLog2TrDynamicRange);
     return;
   }
 #endif
@@ -1859,28 +1969,26 @@ Void TComTrQuant::xT( const ComponentID compID, Bool useDST, Pel* piBlkResi, UIn
     }
   }
 
-  xTrMxN( g_bitDepth[toChannelType(compID)], block, coeff, iWidth, iHeight, useDST, g_maxTrDynamicRange[toChannelType(compID)] );
+  xTrMxN( channelBitDepth, block, coeff, iWidth, iHeight, useDST, maxLog2TrDynamicRange );
 
   memcpy(psCoeff, coeff, (iWidth * iHeight * sizeof(TCoeff)));
 }
 
 /** Wrapper function between HM interface and core NxN inverse transform (2D)
+ *  \param compID colour component ID
+ *  \param useDST
  *  \param plCoef input data (transform coefficients)
  *  \param pResidual output data (residual)
  *  \param uiStride stride of input residual data
- *  \param iSize transform size (iSize x iSize)
- *  \param uiMode is Intra Prediction mode used in Mode-Dependent DCT/DST only
+ *  \param iWidth transform width
+ *  \param iHeight transform height
  */
-Void TComTrQuant::xIT( const ComponentID compID, Bool useDST, TCoeff* plCoef, Pel* pResidual, UInt uiStride, Int iWidth, Int iHeight )
+Void TComTrQuant::xIT( const Int channelBitDepth, Bool useDST, TCoeff* plCoef, Pel* pResidual, UInt uiStride, Int iWidth, Int iHeight, const Int maxLog2TrDynamicRange )
 {
 #if MATRIX_MULT
   if( iWidth == iHeight )
   {
-#if O0043_BEST_EFFORT_DECODING
-    xITr(g_bitDepthInStream[toChannelType(compID)], plCoef, pResidual, uiStride, (UInt)iWidth, useDST, g_maxTrDynamicRange[toChannelType(compID)]);
-#else
-    xITr(g_bitDepth[toChannelType(compID)], plCoef, pResidual, uiStride, (UInt)iWidth, useDST, g_maxTrDynamicRange[toChannelType(compID)]);
-#endif
+    xITr(channelBitDepth, plCoef, pResidual, uiStride, (UInt)iWidth, useDST, maxLog2TrDynamicRange);
     return;
   }
 #endif
@@ -1890,11 +1998,7 @@ Void TComTrQuant::xIT( const ComponentID compID, Bool useDST, TCoeff* plCoef, Pe
 
   memcpy(coeff, plCoef, (iWidth * iHeight * sizeof(TCoeff)));
 
-#if O0043_BEST_EFFORT_DECODING
-  xITrMxN( g_bitDepthInStream[toChannelType(compID)], coeff, block, iWidth, iHeight, useDST, g_maxTrDynamicRange[toChannelType(compID)] );
-#else
-  xITrMxN( g_bitDepth[toChannelType(compID)], coeff, block, iWidth, iHeight, useDST, g_maxTrDynamicRange[toChannelType(compID)] );
-#endif
+  xITrMxN( channelBitDepth, coeff, block, iWidth, iHeight, useDST, maxLog2TrDynamicRange );
 
   for (Int y = 0; y < iHeight; y++)
   {
@@ -1907,17 +2011,20 @@ Void TComTrQuant::xIT( const ComponentID compID, Bool useDST, TCoeff* plCoef, Pe
 
 /** Wrapper function between HM interface and core 4x4 transform skipping
  *  \param piBlkResi input data (residual)
- *  \param psCoeff output data (transform coefficients)
  *  \param uiStride stride of input residual data
- *  \param iSize transform size (iSize x iSize)
+ *  \param psCoeff output data (transform coefficients)
+ *  \param rTu reference to transform data
+ *  \param component colour component
  */
 Void TComTrQuant::xTransformSkip( Pel* piBlkResi, UInt uiStride, TCoeff* psCoeff, TComTU &rTu, const ComponentID component )
 {
   const TComRectangle &rect = rTu.getRect(component);
   const Int width           = rect.width;
   const Int height          = rect.height;
+  const Int maxLog2TrDynamicRange = rTu.getCU()->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(component));
+  const Int channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getBitDepth(toChannelType(component));
 
-  Int iTransformShift = getTransformShift(toChannelType(component), rTu.GetEquivalentLog2TrSize(component));
+  Int iTransformShift = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(component), maxLog2TrDynamicRange);
   if (rTu.getCU()->getSlice()->getSPS()->getUseExtendedPrecision())
   {
     iTransformShift = std::max<Int>(0, iTransformShift);
@@ -1955,15 +2062,22 @@ Void TComTrQuant::xTransformSkip( Pel* piBlkResi, UInt uiStride, TCoeff* psCoeff
  *  \param plCoef input data (coefficients)
  *  \param pResidual output data (residual)
  *  \param uiStride stride of input residual data
- *  \param iSize transform size (iSize x iSize)
+ *  \param rTu reference to transform data
+ *  \param component colour component ID
  */
 Void TComTrQuant::xITransformSkip( TCoeff* plCoef, Pel* pResidual, UInt uiStride, TComTU &rTu, const ComponentID component )
 {
   const TComRectangle &rect = rTu.getRect(component);
   const Int width           = rect.width;
   const Int height          = rect.height;
+  const Int maxLog2TrDynamicRange = rTu.getCU()->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(component));
+#if O0043_BEST_EFFORT_DECODING
+  const Int channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getStreamBitDepth(toChannelType(component));
+#else
+  const Int channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getBitDepth(toChannelType(component));
+#endif
 
-  Int iTransformShift = getTransformShift(toChannelType(component), rTu.GetEquivalentLog2TrSize(component));
+  Int iTransformShift = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(component), maxLog2TrDynamicRange);
   if (rTu.getCU()->getSlice()->getSPS()->getUseExtendedPrecision())
   {
     iTransformShift = std::max<Int>(0, iTransformShift);
@@ -1999,15 +2113,14 @@ Void TComTrQuant::xITransformSkip( TCoeff* plCoef, Pel* pResidual, UInt uiStride
 }
 
 /** RDOQ with CABAC
- * \param pcCU pointer to coding unit structure
+ * \param rTu reference to transform data
  * \param plSrcCoeff pointer to input buffer
  * \param piDstCoeff reference to pointer to output buffer
- * \param uiWidth block width
- * \param uiHeight block height
+ * \param piArlDstCoeff
  * \param uiAbsSum reference to absolute sum of quantized transform coefficient
- * \param eTType plane type / luminance or chrominance
- * \param uiAbsPartIdx absolute partition index
- * \returns Void
+ * \param compID colour component ID
+ * \param cQP reference to quantization parameters
+
  * Rate distortion optimized quantization for entropy
  * coding engines using probability models like CABAC
  */
@@ -2030,6 +2143,8 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
   const UInt             uiLog2TrSize     = rTu.GetEquivalentLog2TrSize(compID);
 
   const Bool             extendedPrecision = pcCU->getSlice()->getSPS()->getUseExtendedPrecision();
+  const Int              maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const Int              channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getBitDepth(channelType);
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
    * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
@@ -2038,7 +2153,7 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
    */
 
   // Represents scaling through forward transform
-  Int iTransformShift            = getTransformShift(channelType, uiLog2TrSize);
+  Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
   if ((pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0) && pcCU->getSlice()->getSPS()->getUseExtendedPrecision())
   {
     iTransformShift = std::max<Int>(0, iTransformShift);
@@ -2082,8 +2197,8 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
   const Int    defaultQuantisationCoefficient = g_quantScales[cQP.rem];
   const Double defaultErrorScale              = getErrScaleCoeffNoScalingList(scalingListType, (uiLog2TrSize-2), cQP.rem);
 
-  const TCoeff entropyCodingMinimum = -(1 << g_maxTrDynamicRange[toChannelType(compID)]);
-  const TCoeff entropyCodingMaximum =  (1 << g_maxTrDynamicRange[toChannelType(compID)]) - 1;
+  const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
 #if ADAPTIVE_QP_SELECTION
   Int iQBitsC = iQBits - ARL_C_PRECISION;
@@ -2424,7 +2539,7 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
   {
     const Double inverseQuantScale = Double(g_invQuantScales[cQP.rem]);
     Int64 rdFactor = (Int64)(inverseQuantScale * inverseQuantScale * (1 << (2 * cQP.per))
-                             / m_dLambda / 16 / (1 << (2 * DISTORTION_PRECISION_ADJUSTMENT(g_bitDepth[channelType] - 8)))
+                             / m_dLambda / 16 / (1 << (2 * DISTORTION_PRECISION_ADJUSTMENT(channelBitDepth - 8)))
                              + 0.5);
 
     Int lastCG = -1;
@@ -2558,8 +2673,8 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
  * \param sigCoeffGroupFlag pointer to prior coded significant coeff group
  * \param uiCGPosX column of current coefficient group
  * \param uiCGPosY row of current coefficient group
- * \param width width of the block
- * \param height height of the block
+ * \param widthInGroups width of the block
+ * \param heightInGroups height of the block
  * \returns pattern for current coefficient group
  */
 Int  TComTrQuant::calcPatternSigCtx( const UInt* sigCoeffGroupFlag, UInt uiCGPosX, UInt uiCGPosY, UInt widthInGroups, UInt heightInGroups )
@@ -2590,11 +2705,11 @@ Int  TComTrQuant::calcPatternSigCtx( const UInt* sigCoeffGroupFlag, UInt uiCGPos
 
 /** Context derivation process of coeff_abs_significant_flag
  * \param patternSigCtx pattern for current coefficient group
- * \param codingParameters coding parmeters for the TU (includes the scan)
+ * \param codingParameters coding parameters for the TU (includes the scan)
  * \param scanPosition current position in scan order
  * \param log2BlockWidth log2 width of the block
  * \param log2BlockHeight log2 height of the block
- * \param ChannelType channel type (CHANNEL_TYPE_LUMA/CHROMA)
+ * \param chanType channel type (CHANNEL_TYPE_LUMA/CHROMA)
  * \returns ctxInc for current scan position
  */
 Int TComTrQuant::getSigCtxInc    (       Int                        patternSigCtx,
@@ -2706,9 +2821,13 @@ Int TComTrQuant::getSigCtxInc    (       Int                        patternSigCt
  * \param ui16CtxNumOne current ctxInc for coeff_abs_level_greater1 (1st bin of coeff_abs_level_minus1 in AVC)
  * \param ui16CtxNumAbs current ctxInc for coeff_abs_level_greater2 (remaining bins of coeff_abs_level_minus1 in AVC)
  * \param ui16AbsGoRice current Rice parameter for coeff_abs_level_minus3
+ * \param c1Idx
+ * \param c2Idx
  * \param iQBits quantization step size
- * \param dTemp correction factor
+ * \param errorScale
  * \param bLast indicates if the coefficient is the last significant
+ * \param useLimitedPrefixLength
+ * \param channelType  texture channel type (luma/chroma)
  * \returns best quantized transform level for given scan position
  * This method calculates the best quantized transform level for a given scan position.
  */
@@ -2775,16 +2894,20 @@ __inline UInt TComTrQuant::xGetCodedLevel ( Double&          rd64CodedCost,
  * \param ui16CtxNumOne current ctxInc for coeff_abs_level_greater1 (1st bin of coeff_abs_level_minus1 in AVC)
  * \param ui16CtxNumAbs current ctxInc for coeff_abs_level_greater2 (remaining bins of coeff_abs_level_minus1 in AVC)
  * \param ui16AbsGoRice Rice parameter for coeff_abs_level_minus3
+ * \param c1Idx
+ * \param c2Idx
+ * \param useLimitedPrefixLength
+ * \param channelType  texture channel type (luma/chroma)
  * \returns cost of given absolute transform level
  */
-__inline Int TComTrQuant::xGetICRate         ( UInt                            uiAbsLevel,
-                                               UShort                          ui16CtxNumOne,
-                                               UShort                          ui16CtxNumAbs,
-                                               UShort                          ui16AbsGoRice,
-                                               UInt                            c1Idx,
-                                               UInt                            c2Idx,
-                                               Bool                            useLimitedPrefixLength,
-                                               ChannelType                     channelType
+__inline Int TComTrQuant::xGetICRate         ( const UInt    uiAbsLevel,
+                                               const UShort  ui16CtxNumOne,
+                                               const UShort  ui16CtxNumAbs,
+                                               const UShort  ui16AbsGoRice,
+                                               const UInt    c1Idx,
+                                               const UInt    c2Idx,
+                                               const Bool    useLimitedPrefixLength,
+                                               const Int     maxLog2TrDynamicRange
                                                ) const
 {
   Int  iRate      = Int(xGetIEPRate()); // cost of sign bit
@@ -2801,7 +2924,7 @@ __inline Int TComTrQuant::xGetICRate         ( UInt                            u
     }
     else if (useLimitedPrefixLength)
     {
-      const UInt maximumPrefixLength = (32 - (COEF_REMAIN_BIN_REDUCTION + g_maxTrDynamicRange[channelType]));
+      const UInt maximumPrefixLength = (32 - (COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange));
 
       UInt prefixLength = 0;
       UInt suffix       = (symbol >> ui16AbsGoRice) - COEF_REMAIN_BIN_REDUCTION;
@@ -2811,7 +2934,7 @@ __inline Int TComTrQuant::xGetICRate         ( UInt                            u
         prefixLength++;
       }
 
-      const UInt suffixLength = (prefixLength == maximumPrefixLength) ? (g_maxTrDynamicRange[channelType] - ui16AbsGoRice) : (prefixLength + 1/*separator*/);
+      const UInt suffixLength = (prefixLength == maximumPrefixLength) ? (maxLog2TrDynamicRange - ui16AbsGoRice) : (prefixLength + 1/*separator*/);
 
       iRate += (COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ui16AbsGoRice) << 15;
     }
@@ -2862,6 +2985,7 @@ __inline Double TComTrQuant::xGetRateSigCoeffGroup  ( UShort                    
 /** Calculates the cost of signaling the last significant coefficient in the block
  * \param uiPosX X coordinate of the last significant coefficient
  * \param uiPosY Y coordinate of the last significant coefficient
+ * \param component colour component ID
  * \returns cost of last significant coefficient
  */
 /*
@@ -2887,13 +3011,6 @@ __inline Double TComTrQuant::xGetRateLast   ( const UInt                      ui
   return xGetICost( uiCost );
 }
 
- /** Calculates the cost for specific absolute transform level
- * \param uiAbsLevel scaled quantized level
- * \param ui16CtxNumOne current ctxInc for coeff_abs_level_greater1 (1st bin of coeff_abs_level_minus1 in AVC)
- * \param ui16CtxNumAbs current ctxInc for coeff_abs_level_greater2 (remaining bins of coeff_abs_level_minus1 in AVC)
- * \param ui16CtxBase current global offset for coeff_abs_level_greater1 and coeff_abs_level_greater2
- * \returns cost of given absolute transform level
- */
 __inline Double TComTrQuant::xGetRateSigCoef  ( UShort                          uiSignificance,
                                                 UShort                          ui16CtxNumSig ) const
 {
@@ -2919,9 +3036,10 @@ __inline Double TComTrQuant::xGetIEPRate      (                                 
 
 /** Context derivation process of coeff_abs_significant_flag
  * \param uiSigCoeffGroupFlag significance map of L1
- * \param uiBlkX column of current scan position
- * \param uiBlkY row of current scan position
- * \param uiLog2BlkSize log2 value of block size
+ * \param uiCGPosX column of current scan position
+ * \param uiCGPosY row of current scan position
+ * \param widthInGroups width of the block
+ * \param heightInGroups height of the block
  * \returns ctxInc for current scan position
  */
 UInt TComTrQuant::getSigCoeffGroupCtxInc  (const UInt*  uiSigCoeffGroupFlag,
@@ -2947,9 +3065,10 @@ UInt TComTrQuant::getSigCoeffGroupCtxInc  (const UInt*  uiSigCoeffGroupFlag,
 
 
 /** set quantized matrix coefficient for encode
- * \param scalingList quantaized matrix address
+ * \param scalingList quantized matrix address
+ * \param format      chroma format
  */
-Void TComTrQuant::setScalingList(TComScalingList *scalingList, const ChromaFormat format)
+Void TComTrQuant::setScalingList(TComScalingList *scalingList, const ChromaFormat format, const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE], const BitDepths &bitDepths)
 {
   const Int minimumQp = 0;
   const Int maximumQp = SCALING_LIST_REM_NUM;
@@ -2962,13 +3081,14 @@ Void TComTrQuant::setScalingList(TComScalingList *scalingList, const ChromaForma
       {
         xSetScalingListEnc(scalingList,list,size,qp,format);
         xSetScalingListDec(*scalingList,list,size,qp,format);
-        setErrScaleCoeff(list,size,qp);
+        setErrScaleCoeff(list,size,qp,maxLog2TrDynamicRange, bitDepths);
       }
     }
   }
 }
 /** set quantized matrix coefficient for decode
- * \param scalingList quantaized matrix address
+ * \param scalingList quantized matrix address
+ * \param format      chroma format
  */
 Void TComTrQuant::setScalingListDec(const TComScalingList &scalingList, const ChromaFormat format)
 {
@@ -2988,15 +3108,16 @@ Void TComTrQuant::setScalingListDec(const TComScalingList &scalingList, const Ch
 }
 /** set error scale coefficients
  * \param list List ID
- * \param uiSize Size
- * \param uiQP Quantization parameter
+ * \param size Size
+ * \param qp   Quantization parameter
  */
-Void TComTrQuant::setErrScaleCoeff(UInt list, UInt size, Int qp)
+Void TComTrQuant::setErrScaleCoeff(UInt list, UInt size, Int qp, const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE], const BitDepths &bitDepths)
 {
   const UInt uiLog2TrSize = g_aucConvertToBit[ g_scalingListSizeX[size] ] + 2;
   const ChannelType channelType = ((list == 0) || (list == MAX_NUM_COMPONENT)) ? CHANNEL_TYPE_LUMA : CHANNEL_TYPE_CHROMA;
 
-  const Int iTransformShift = getTransformShift(channelType, uiLog2TrSize);  // Represents scaling through forward transform
+  const Int channelBitDepth    = bitDepths.recon[channelType];
+  const Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange[channelType]);  // Represents scaling through forward transform
 
   UInt i,uiMaxNumCoeff = g_scalingListSize[size];
   Int *piQuantcoeff;
@@ -3009,17 +3130,18 @@ Void TComTrQuant::setErrScaleCoeff(UInt list, UInt size, Int qp)
 
   for(i=0;i<uiMaxNumCoeff;i++)
   {
-    pdErrScale[i] =  dErrScale / piQuantcoeff[i] / piQuantcoeff[i] / (1 << DISTORTION_PRECISION_ADJUSTMENT(2 * (g_bitDepth[channelType] - 8)));
+    pdErrScale[i] =  dErrScale / piQuantcoeff[i] / piQuantcoeff[i] / (1 << DISTORTION_PRECISION_ADJUSTMENT(2 * (bitDepths.recon[channelType] - 8)));
   }
 
-  getErrScaleCoeffNoScalingList(list, size, qp) = dErrScale / g_quantScales[qp] / g_quantScales[qp] / (1 << DISTORTION_PRECISION_ADJUSTMENT(2 * (g_bitDepth[channelType] - 8)));
+  getErrScaleCoeffNoScalingList(list, size, qp) = dErrScale / g_quantScales[qp] / g_quantScales[qp] / (1 << DISTORTION_PRECISION_ADJUSTMENT(2 * (bitDepths.recon[channelType] - 8)));
 }
 
 /** set quantized matrix coefficient for encode
- * \param scalingList quantaized matrix address
+ * \param scalingList quantized matrix address
  * \param listId List index
  * \param sizeId size index
- * \param uiQP Quantization parameter
+ * \param qp Quantization parameter
+ * \param format chroma format
  */
 Void TComTrQuant::xSetScalingListEnc(TComScalingList *scalingList, UInt listId, UInt sizeId, Int qp, const ChromaFormat format)
 {
@@ -3042,9 +3164,10 @@ Void TComTrQuant::xSetScalingListEnc(TComScalingList *scalingList, UInt listId, 
 
 /** set quantized matrix coefficient for decode
  * \param scalingList quantaized matrix address
- * \param list List index
- * \param size size index
- * \param uiQP Quantization parameter
+ * \param listId List index
+ * \param sizeId size index
+ * \param qp Quantization parameter
+ * \param format chroma format
  */
 Void TComTrQuant::xSetScalingListDec(const TComScalingList &scalingList, UInt listId, UInt sizeId, Int qp, const ChromaFormat format)
 {
@@ -3068,7 +3191,7 @@ Void TComTrQuant::xSetScalingListDec(const TComScalingList &scalingList, UInt li
 
 /** set flat matrix value to quantized coefficient
  */
-Void TComTrQuant::setFlatScalingList(const ChromaFormat format)
+Void TComTrQuant::setFlatScalingList(const ChromaFormat format, const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE], const BitDepths &bitDepths)
 {
   const Int minimumQp = 0;
   const Int maximumQp = SCALING_LIST_REM_NUM;
@@ -3080,7 +3203,7 @@ Void TComTrQuant::setFlatScalingList(const ChromaFormat format)
       for(Int qp = minimumQp; qp < maximumQp; qp++)
       {
         xsetFlatScalingList(list,size,qp,format);
-        setErrScaleCoeff(list,size,qp);
+        setErrScaleCoeff(list,size,qp,maxLog2TrDynamicRange, bitDepths);
       }
     }
   }
@@ -3088,8 +3211,9 @@ Void TComTrQuant::setFlatScalingList(const ChromaFormat format)
 
 /** set flat matrix value to quantized coefficient
  * \param list List ID
- * \param uiQP Quantization parameter
- * \param uiSize Size
+ * \param size size index
+ * \param qp Quantization parameter
+ * \param format chroma format
  */
 Void TComTrQuant::xsetFlatScalingList(UInt list, UInt size, Int qp, const ChromaFormat format)
 {
@@ -3214,7 +3338,9 @@ Void TComTrQuant::transformSkipQuantOneSample(TComTU &rTu, const ComponentID com
   const TComRectangle &rect                           = rTu.getRect(compID);
   const UInt           uiWidth                        = rect.width;
   const UInt           uiHeight                       = rect.height;
-  const Int            iTransformShift                = getTransformShift(toChannelType(compID), rTu.GetEquivalentLog2TrSize(compID));
+  const Int            maxLog2TrDynamicRange          = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const Int            channelBitDepth                = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+  const Int            iTransformShift                = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(compID), maxLog2TrDynamicRange);
   const Int            scalingListType                = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
   const Bool           enableScalingLists             = getUseScalingList(uiWidth, uiHeight, true);
   const Int            defaultQuantisationCoefficient = g_quantScales[cQP.rem];
@@ -3257,8 +3383,8 @@ Void TComTrQuant::transformSkipQuantOneSample(TComTU &rTu, const ComponentID com
 
   const TCoeff quantisedCoefficient = (TCoeff((tmpLevel + iAdd ) >> iQBits)) * iSign;
 
-  const TCoeff entropyCodingMinimum = -(1 << g_maxTrDynamicRange[toChannelType(compID)]);
-  const TCoeff entropyCodingMaximum =  (1 << g_maxTrDynamicRange[toChannelType(compID)]) - 1;
+  const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
   pcCoeff[ uiPos ] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
 }
 
@@ -3272,7 +3398,13 @@ Void TComTrQuant::invTrSkipDeQuantOneSample( TComTU &rTu, ComponentID compID, TC
   const UInt           uiHeight           = rect.height;
   const Int            QP_per             = cQP.per;
   const Int            QP_rem             = cQP.rem;
-  const Int            iTransformShift    = getTransformShift(toChannelType(compID), rTu.GetEquivalentLog2TrSize(compID));
+  const Int            maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+#if O0043_BEST_EFFORT_DECODING
+  const Int            channelBitDepth    = pcCU->getSlice()->getSPS()->getStreamBitDepth(toChannelType(compID));
+#else
+  const Int            channelBitDepth    = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+#endif
+  const Int            iTransformShift    = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(compID), maxLog2TrDynamicRange);
   const Int            scalingListType    = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
   const Bool           enableScalingLists = getUseScalingList(uiWidth, uiHeight, true);
   const UInt           uiLog2TrSize       = rTu.GetEquivalentLog2TrSize(compID);
@@ -3281,8 +3413,8 @@ Void TComTrQuant::invTrSkipDeQuantOneSample( TComTU &rTu, ComponentID compID, TC
 
   const Int rightShift = (IQUANT_SHIFT - (iTransformShift + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
 
-  const TCoeff transformMinimum = -(1 << g_maxTrDynamicRange[toChannelType(compID)]);
-  const TCoeff transformMaximum =  (1 << g_maxTrDynamicRange[toChannelType(compID)]) - 1;
+  const TCoeff transformMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff transformMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
   // Dequantisation
 
@@ -3291,7 +3423,7 @@ Void TComTrQuant::invTrSkipDeQuantOneSample( TComTU &rTu, ComponentID compID, TC
   if(enableScalingLists)
   {
     const UInt             dequantCoefBits     = 1 + IQUANT_SHIFT + SCALING_LIST_BITS;
-    const UInt             targetInputBitDepth = std::min<UInt>((g_maxTrDynamicRange[toChannelType(compID)] + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - dequantCoefBits));
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - dequantCoefBits));
 
     const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
@@ -3320,7 +3452,7 @@ Void TComTrQuant::invTrSkipDeQuantOneSample( TComTU &rTu, ComponentID compID, TC
     const Int scale     =  g_invQuantScales[QP_rem];
     const Int scaleBits =     (IQUANT_SHIFT + 1)   ;
 
-    const UInt             targetInputBitDepth = std::min<UInt>((g_maxTrDynamicRange[toChannelType(compID)] + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
     const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
 

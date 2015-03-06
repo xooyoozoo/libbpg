@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,10 +73,9 @@ public:
   Void  uninit                 ()                { m_pcBinIf = 0; }
 
   //  Virtual list
-  Void  resetEntropy           ();
-  SliceType determineCabacInitIdx  ();
+  Void  resetEntropy           (const TComSlice *pSlice);
+  SliceType determineCabacInitIdx  (const TComSlice *pSlice);
   Void  setBitstream           ( TComBitIf* p )  { m_pcBitIf = p; m_pcBinIf->init( p ); }
-  Void  setSlice               ( TComSlice* p )  { m_pcSlice = p;                       }
 
   Void  load                   ( const TEncSbac* pSrc  );
   Void  loadIntraDirMode       ( const TEncSbac* pScr, const ChannelType chType  );
@@ -99,8 +98,8 @@ public:
   Void  codeSaoUflc          ( UInt uiLength, UInt  uiCode );
   Void  codeSAOSign          ( UInt  uiCode);  //<! code SAO offset sign
 
-  Void codeSAOOffsetParam(ComponentID compIdx, SAOOffset& ctbParam, Bool sliceEnabled);
-  Void codeSAOBlkParam(SAOBlkParam& saoBlkParam
+  Void codeSAOOffsetParam(ComponentID compIdx, SAOOffset& ctbParam, Bool sliceEnabled, const Int channelBitDepth);
+  Void codeSAOBlkParam(SAOBlkParam& saoBlkParam, const BitDepths &bitDepths
                     , Bool* sliceEnabled
                     , Bool leftMergeAvail
                     , Bool aboveMergeAvail
@@ -111,7 +110,7 @@ private:
   Void  xWriteUnarySymbol    ( UInt uiSymbol, ContextModel* pcSCModel, Int iOffset );
   Void  xWriteUnaryMaxSymbol ( UInt uiSymbol, ContextModel* pcSCModel, Int iOffset, UInt uiMaxSymbol );
   Void  xWriteEpExGolomb     ( UInt uiSymbol, UInt uiCount );
-  Void  xWriteCoefRemainExGolomb ( UInt symbol, UInt &rParam, const Bool useLimitedPrefixLength, const ChannelType channelType );
+  Void  xWriteCoefRemainExGolomb ( UInt symbol, UInt &rParam, const Bool useLimitedPrefixLength, const ChannelType channelType, const Int maxLog2TrDynamicRange );
 
   Void  xCopyFrom            ( const TEncSbac* pSrc );
   Void  xCopyContextsFrom    ( const TEncSbac* pSrc );
@@ -121,7 +120,6 @@ private:
 
 protected:
   TComBitIf*    m_pcBitIf;
-  TComSlice*    m_pcSlice;
   TEncBinIf*    m_pcBinIf;
 
   //--Adaptive loop filter

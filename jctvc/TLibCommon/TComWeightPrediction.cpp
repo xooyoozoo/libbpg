@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,9 +36,11 @@
 */
 
 // Include files
-#include "TComSlice.h"
-#include "TComWeightPrediction.h"
+#include "CommonDef.h"
+#include "TComYuv.h"
+#include "TComPic.h"
 #include "TComInterpolationFilter.h"
+#include "TComWeightPrediction.h"
 
 
 static inline Pel weightBidir( Int w0, Pel P0, Int w1, Pel P1, Int round, Int shift, Int offset, Int clipBD)
@@ -61,26 +63,17 @@ TComWeightPrediction::TComWeightPrediction()
 }
 
 
-/** weighted averaging for bi-pred
- * \param TComYuv* pcYuvSrc0
- * \param TComYuv* pcYuvSrc1
- * \param iPartUnitIdx
- * \param iWidth
- * \param iHeight
- * \param WPScalingParam *wp0
- * \param WPScalingParam *wp1
- * \param TComYuv* rpcYuvDst
- * \returns Void
- */
+//! weighted averaging for bi-pred
 Void TComWeightPrediction::addWeightBi( const TComYuv              *pcYuvSrc0,
                                         const TComYuv              *pcYuvSrc1,
+                                        const BitDepths            &bitDepths,
                                         const UInt                  iPartUnitIdx,
                                         const UInt                  uiWidth,
                                         const UInt                  uiHeight,
                                         const WPScalingParam *const wp0,
                                         const WPScalingParam *const wp1,
                                               TComYuv        *const rpcYuvDst,
-                                        const Bool                  bRoundLuma )
+                                        const Bool                  bRoundLuma)
 {
 
   const Bool enableRounding[MAX_NUM_COMPONENT]={ bRoundLuma, true, true };
@@ -98,7 +91,7 @@ Void TComWeightPrediction::addWeightBi( const TComYuv              *pcYuvSrc0,
     // Luma : --------------------------------------------
     const Int  w0          = wp0[compID].w;
     const Int  offset      = wp0[compID].offset;
-    const Int  clipBD      = g_bitDepth[toChannelType(compID)];
+    const Int  clipBD      = bitDepths.recon[toChannelType(compID)];
     const Int  shiftNum    = std::max<Int>(2, (IF_INTERNAL_PREC - clipBD));
     const Int  shift       = wp0[compID].shift + shiftNum;
     const Int  round       = (enableRounding[compID] && (shift > 0)) ? (1<<(shift-1)) : 0;
@@ -136,16 +129,9 @@ Void TComWeightPrediction::addWeightBi( const TComYuv              *pcYuvSrc0,
 }
 
 
-/** weighted averaging for uni-pred
- * \param TComYuv* pcYuvSrc0
- * \param iPartUnitIdx
- * \param iWidth
- * \param iHeight
- * \param WPScalingParam *wp0
- * \param TComYuv* rpcYuvDst
- * \returns Void
- */
+//! weighted averaging for uni-pred
 Void TComWeightPrediction::addWeightUni( const TComYuv        *const pcYuvSrc0,
+                                         const BitDepths            &bitDepths,
                                          const UInt                  iPartUnitIdx,
                                          const UInt                  uiWidth,
                                          const UInt                  uiHeight,
@@ -164,7 +150,7 @@ Void TComWeightPrediction::addWeightUni( const TComYuv        *const pcYuvSrc0,
     // Luma : --------------------------------------------
     const Int  w0          = wp0[compID].w;
     const Int  offset      = wp0[compID].offset;
-    const Int  clipBD      = g_bitDepth[toChannelType(compID)];
+    const Int  clipBD      = bitDepths.recon[toChannelType(compID)];
     const Int  shiftNum    = std::max<Int>(2, (IF_INTERNAL_PREC - clipBD));
     const Int  shift       = wp0[compID].shift + shiftNum;
     const Int  round       = (shift > 0) ? (1<<(shift-1)) : 0;
@@ -199,15 +185,7 @@ Void TComWeightPrediction::addWeightUni( const TComYuv        *const pcYuvSrc0,
 //=======================================================
 //  getWpScaling()
 //=======================================================
-/** derivation of wp tables
- * \param TComDataCU* pcCU
- * \param iRefIdx0
- * \param iRefIdx1
- * \param WPScalingParam *&wp0
- * \param WPScalingParam *&wp1
- * \param ibdi
- * \returns Void
- */
+//! derivation of wp tables
 Void TComWeightPrediction::getWpScaling(       TComDataCU *const pcCU,
                                          const Int               iRefIdx0,
                                          const Int               iRefIdx1,
@@ -253,7 +231,7 @@ Void TComWeightPrediction::getWpScaling(       TComDataCU *const pcCU,
   { // Bi-Dir case
     for ( Int yuv=0 ; yuv<numValidComponent ; yuv++ )
     {
-      const Int bitDepth            = g_bitDepth[toChannelType(ComponentID(yuv))];
+      const Int bitDepth            = pcSlice->getSPS()->getBitDepth(toChannelType(ComponentID(yuv)));
       const Int offsetScalingFactor = bUseHighPrecisionPredictionWeighting ? 1 : (1 << (bitDepth-8));
 
       wp0[yuv].w      = wp0[yuv].iWeight;
@@ -274,7 +252,7 @@ Void TComWeightPrediction::getWpScaling(       TComDataCU *const pcCU,
 
     for ( Int yuv=0 ; yuv<numValidComponent ; yuv++ )
     {
-      const Int bitDepth            = g_bitDepth[toChannelType(ComponentID(yuv))];
+      const Int bitDepth            = pcSlice->getSPS()->getBitDepth(toChannelType(ComponentID(yuv)));
       const Int offsetScalingFactor = bUseHighPrecisionPredictionWeighting ? 1 : (1 << (bitDepth-8));
 
       pwp[yuv].w      = pwp[yuv].iWeight;
@@ -286,18 +264,7 @@ Void TComWeightPrediction::getWpScaling(       TComDataCU *const pcCU,
 }
 
 
-/** weighted prediction for bi-pred
- * \param TComDataCU* pcCU
- * \param TComYuv* pcYuvSrc0
- * \param TComYuv* pcYuvSrc1
- * \param iRefIdx0
- * \param iRefIdx1
- * \param uiPartIdx
- * \param iWidth
- * \param iHeight
- * \param TComYuv* rpcYuvDst
- * \returns Void
- */
+//! weighted prediction for bi-pred
 Void TComWeightPrediction::xWeightedPredictionBi(       TComDataCU *const pcCU,
                                                   const TComYuv    *const pcYuvSrc0,
                                                   const TComYuv    *const pcYuvSrc1,
@@ -317,15 +284,15 @@ Void TComWeightPrediction::xWeightedPredictionBi(       TComDataCU *const pcCU,
 
   if( iRefIdx0 >= 0 && iRefIdx1 >= 0 )
   {
-    addWeightBi(pcYuvSrc0, pcYuvSrc1, uiPartIdx, iWidth, iHeight, pwp0, pwp1, rpcYuvDst );
+    addWeightBi(pcYuvSrc0, pcYuvSrc1, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartIdx, iWidth, iHeight, pwp0, pwp1, rpcYuvDst );
   }
   else if ( iRefIdx0 >= 0 && iRefIdx1 <  0 )
   {
-    addWeightUni( pcYuvSrc0, uiPartIdx, iWidth, iHeight, pwp0, rpcYuvDst );
+    addWeightUni( pcYuvSrc0, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartIdx, iWidth, iHeight, pwp0, rpcYuvDst );
   }
   else if ( iRefIdx0 <  0 && iRefIdx1 >= 0 )
   {
-    addWeightUni( pcYuvSrc1, uiPartIdx, iWidth, iHeight, pwp1, rpcYuvDst );
+    addWeightUni( pcYuvSrc1, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartIdx, iWidth, iHeight, pwp1, rpcYuvDst );
   }
   else
   {
@@ -334,18 +301,7 @@ Void TComWeightPrediction::xWeightedPredictionBi(       TComDataCU *const pcCU,
 }
 
 
-/** weighted prediction for uni-pred
- * \param TComDataCU* pcCU
- * \param TComYuv* pcYuvSrc
- * \param uiPartAddr
- * \param iWidth
- * \param iHeight
- * \param eRefPicList
- * \param TComYuv* pcYuvPred
- * \param iPartIdx
- * \param iRefIdx
- * \returns Void
- */
+//! weighted prediction for uni-pred
 Void TComWeightPrediction::xWeightedPredictionUni(       TComDataCU *const pcCU,
                                                    const TComYuv    *const pcYuvSrc,
                                                    const UInt              uiPartAddr,
@@ -372,5 +328,5 @@ Void TComWeightPrediction::xWeightedPredictionUni(       TComDataCU *const pcCU,
   {
     getWpScaling(pcCU, -1, iRefIdx, pwpTmp, pwp);
   }
-  addWeightUni( pcYuvSrc, uiPartAddr, iWidth, iHeight, pwp, pcYuvPred );
+  addWeightUni( pcYuvSrc, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartAddr, iWidth, iHeight, pwp, pcYuvPred );
 }

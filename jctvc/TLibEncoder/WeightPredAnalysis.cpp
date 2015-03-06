@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,10 +63,7 @@ WeightPredAnalysis::WeightPredAnalysis()
 }
 
 
-/** calculate AC and DC values for current original image
- * \param TComSlice *slice
- * \returns Void
- */
+//! calculate AC and DC values for current original image
 Void WeightPredAnalysis::xCalcACDCParamSlice(TComSlice *const slice)
 {
   //===== calculate AC/DC value =====
@@ -123,10 +120,7 @@ Void WeightPredAnalysis::xCalcACDCParamSlice(TComSlice *const slice)
 }
 
 
-/** check weighted pred or non-weighted pred
- * \param TComSlice *slice
- * \returns Void
- */
+//! check weighted pred or non-weighted pred
 Void  WeightPredAnalysis::xCheckWPEnable(TComSlice *const slice)
 {
   const TComPicYuv *pPic = slice->getPic()->getPicYuvOrg();
@@ -174,9 +168,7 @@ Void  WeightPredAnalysis::xCheckWPEnable(TComSlice *const slice)
 }
 
 
-/** estimate wp tables for explicit wp
- * \param TComSlice *slice
- */
+//! estimate wp tables for explicit wp
 Void WeightPredAnalysis::xEstimateWPParamSlice(TComSlice *const slice)
 {
   Int  iDenom         = 6;
@@ -204,10 +196,7 @@ Void WeightPredAnalysis::xEstimateWPParamSlice(TComSlice *const slice)
 }
 
 
-/** update wp tables for explicit wp w.r.t ramge limitation
- * \param TComSlice *slice
- * \returns Bool
- */
+//! update wp tables for explicit wp w.r.t range limitation
 Bool WeightPredAnalysis::xUpdatingWPParameters(TComSlice *const slice, const Int log2Denom)
 {
   const Int  numComp                    = slice->getPic()->getPicYuvOrg()->getNumberValidComponents();
@@ -229,8 +218,9 @@ Bool WeightPredAnalysis::xUpdatingWPParameters(TComSlice *const slice, const Int
       for ( Int comp = 0; comp < numComp; comp++ )
       {
         const ComponentID compID        = ComponentID(comp);
-        const Int         range         = bUseHighPrecisionWeighting ? (1<<g_bitDepth[toChannelType(compID)])/2 : 128;
-        const Int         realLog2Denom = log2Denom + (bUseHighPrecisionWeighting ? RExt__PREDICTION_WEIGHTING_ANALYSIS_DC_PRECISION : (g_bitDepth[toChannelType(compID)] - 8));
+        const Int         bitDepth      = slice->getSPS()->getBitDepth(toChannelType(compID));
+        const Int         range         = bUseHighPrecisionWeighting ? (1<<bitDepth)/2 : 128;
+        const Int         realLog2Denom = log2Denom + (bUseHighPrecisionWeighting ? RExt__PREDICTION_WEIGHTING_ANALYSIS_DC_PRECISION : (bitDepth - 8));
         const Int         realOffset    = ((Int)1<<(realLog2Denom-1));
 
         // current frame
@@ -278,11 +268,7 @@ Bool WeightPredAnalysis::xUpdatingWPParameters(TComSlice *const slice, const Int
 }
 
 
-/** select whether weighted pred enables or not.
- * \param TComSlice *slice
- * \param log2Denom
- * \returns Bool
- */
+//! select whether weighted pred enables or not.
 Bool WeightPredAnalysis::xSelectWP(TComSlice *const slice, const Int log2Denom)
 {
         TComPicYuv *const pPic                                = slice->getPic()->getPicYuvOrg();
@@ -309,7 +295,7 @@ Bool WeightPredAnalysis::xSelectWP(TComSlice *const slice, const Int log2Denom)
         const Int          iRefStride = slice->getRefPic(eRefPicList, iRefIdxTemp)->getPicYuvRec()->getStride(compID);
         const Int          iWidth     = pPic->getWidth(compID);
         const Int          iHeight    = pPic->getHeight(compID);
-        const Int          bitDepth   = g_bitDepth[toChannelType(compID)];
+        const Int          bitDepth   = slice->getSPS()->getBitDepth(toChannelType(compID));
 
         // calculate SAD costs with/without wp for luma
         iSADWP   += xCalcSADvalueWP(bitDepth, pOrg, pRef, iWidth, iHeight, iOrgStride, iRefStride, log2Denom, m_wp[iRefList][iRefIdxTemp][compID].iWeight, m_wp[iRefList][iRefIdxTemp][compID].iOffset, useHighPrecisionPredictionWeighting);
@@ -334,18 +320,7 @@ Bool WeightPredAnalysis::xSelectWP(TComSlice *const slice, const Int log2Denom)
 }
 
 
-/** calculate SAD values for both WP version and non-WP version.
- * \param Pel *pOrgPel
- * \param Pel *pRefPel
- * \param Int iWidth
- * \param Int iHeight
- * \param Int iOrgStride
- * \param Int iRefStride
- * \param Int iLog2Denom
- * \param Int iWeight
- * \param Int iOffset
- * \returns Int64
- */
+//! calculate SAD values for both WP version and non-WP version.
 Int64 WeightPredAnalysis::xCalcSADvalueWP(const Int   bitDepth,
                                           const Pel  *pOrgPel,
                                           const Pel  *pRefPel,

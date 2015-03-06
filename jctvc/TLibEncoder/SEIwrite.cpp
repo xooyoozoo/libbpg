@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -128,62 +128,58 @@ Void SEIWriter::xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, const TComSP
 }
 
 /**
- * marshal a single SEI message sei, storing the marshalled representation
- * in bitstream bs.
+ * marshal all SEI messages in provided list into one bitstream bs
  */
-Void SEIWriter::writeSEImessage(TComBitIf& bs, const SEI& sei, const TComSPS *sps)
+Void SEIWriter::writeSEImessages(TComBitIf& bs, const SEIMessages &seiList, const TComSPS *sps)
 {
-  /* calculate how large the payload data is */
-  /* TODO: this would be far nicer if it used vectored buffers */
-  TComBitCounter bs_count;
-  bs_count.resetBits();
-  setBitstream(&bs_count);
-
-
-#if ENC_DEC_TRACE
-  Bool traceEnable = g_HLSTraceEnable;
-  g_HLSTraceEnable = false;
-#endif
-  xWriteSEIpayloadData(bs_count, sei, sps);
-#if ENC_DEC_TRACE
-  g_HLSTraceEnable = traceEnable;
-#endif
-
-  UInt payload_data_num_bits = bs_count.getNumberOfWrittenBits();
-  assert(0 == payload_data_num_bits % 8);
-
-  setBitstream(&bs);
-
 #if ENC_DEC_TRACE
   if (g_HLSTraceEnable)
-  {
     xTraceSEIHeader();
-  }
 #endif
 
-  UInt payloadType = sei.payloadType();
-  for (; payloadType >= 0xff; payloadType -= 0xff)
-  {
-    WRITE_CODE(0xff, 8, "payload_type");
-  }
-  WRITE_CODE(payloadType, 8, "payload_type");
+  TComBitCounter bs_count;
 
-  UInt payloadSize = payload_data_num_bits/8;
-  for (; payloadSize >= 0xff; payloadSize -= 0xff)
+  for (SEIMessages::const_iterator sei=seiList.begin(); sei!=seiList.end(); sei++)
   {
-    WRITE_CODE(0xff, 8, "payload_size");
-  }
-  WRITE_CODE(payloadSize, 8, "payload_size");
+    // calculate how large the payload data is
+    // TODO: this would be far nicer if it used vectored buffers
+    bs_count.resetBits();
+    setBitstream(&bs_count);
 
-  /* payloadData */
 #if ENC_DEC_TRACE
-  if (g_HLSTraceEnable)
-  {
-    xTraceSEIMessageType(sei.payloadType());
-  }
+    Bool traceEnable = g_HLSTraceEnable;
+    g_HLSTraceEnable = false;
+#endif
+    xWriteSEIpayloadData(bs_count, **sei, sps);
+#if ENC_DEC_TRACE
+    g_HLSTraceEnable = traceEnable;
+#endif
+    UInt payload_data_num_bits = bs_count.getNumberOfWrittenBits();
+    assert(0 == payload_data_num_bits % 8);
+
+    setBitstream(&bs);
+    UInt payloadType = (*sei)->payloadType();
+    for (; payloadType >= 0xff; payloadType -= 0xff)
+    {
+      WRITE_CODE(0xff, 8, "payload_type");
+    }
+    WRITE_CODE(payloadType, 8, "payload_type");
+
+    UInt payloadSize = payload_data_num_bits/8;
+    for (; payloadSize >= 0xff; payloadSize -= 0xff)
+    {
+      WRITE_CODE(0xff, 8, "payload_size");
+    }
+    WRITE_CODE(payloadSize, 8, "payload_size");
+
+    /* payloadData */
+#if ENC_DEC_TRACE
+    if (g_HLSTraceEnable)
+      xTraceSEIMessageType((*sei)->payloadType());
 #endif
 
-  xWriteSEIpayloadData(bs, sei, sps);
+    xWriteSEIpayloadData(bs, **sei, sps);
+  }
 }
 
 /**
@@ -221,9 +217,9 @@ Void SEIWriter::xWriteSEIDecodedPictureHash(const SEIDecodedPictureHash& sei)
   if (traceString != 0) //use of this variable is needed to avoid a compiler error with G++ 4.6.1
   {
     WRITE_CODE(sei.method, 8, "hash_type");
-    for(UInt i=0; i<UInt(sei.m_digest.hash.size()); i++)
+    for(UInt i=0; i<UInt(sei.m_pictureHash.hash.size()); i++)
     {
-      WRITE_CODE(sei.m_digest.hash[i], 8, traceString);
+      WRITE_CODE(sei.m_pictureHash.hash[i], 8, traceString);
     }
   }
 }
@@ -540,10 +536,7 @@ Void SEIWriter::xWriteSEIScalableNesting(TComBitIf& bs, const SEIScalableNesting
   }
 
   // write nested SEI messages
-  for (SEIMessages::const_iterator it = sei.m_nestedSEIs.begin(); it != sei.m_nestedSEIs.end(); it++)
-  {
-    writeSEImessage(bs, *(*it), sps);
-  }
+  writeSEImessages(bs, sei.m_nestedSEIs, sps);
 }
 
 Void SEIWriter::xWriteSEITempMotionConstrainedTileSets(TComBitIf& bs, const SEITempMotionConstrainedTileSets& sei)

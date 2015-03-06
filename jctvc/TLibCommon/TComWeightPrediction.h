@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,13 +38,12 @@
 #ifndef __TCOMWEIGHTPREDICTION__
 #define __TCOMWEIGHTPREDICTION__
 
+#include "CommonDef.h"
 
-// Include files
-#include "TComPic.h"
-#include "TComMotionInfo.h"
-#include "TComPattern.h"
-#include "TComTrQuant.h"
-#include "TComInterpolationFilter.h"
+// forward declarations
+class  TComDataCU;
+class  TComYuv;
+struct WPScalingParam;
 
 // ====================================================================================================================
 // Class definition
@@ -63,6 +62,7 @@ public:
 
   Void addWeightBi(             const TComYuv              *pcYuvSrc0,
                                 const TComYuv              *pcYuvSrc1,
+                                const BitDepths            &bitDepths,
                                 const UInt                  iPartUnitIdx,
                                 const UInt                  uiWidth,
                                 const UInt                  uiHeight,
@@ -72,6 +72,7 @@ public:
                                 const Bool                  bRoundLuma=true );
 
   Void  addWeightUni(           const TComYuv        *const pcYuvSrc0,
+                                const BitDepths            &bitDepths,
                                 const UInt                  iPartUnitIdx,
                                 const UInt                  uiWidth,
                                 const UInt                  uiHeight,

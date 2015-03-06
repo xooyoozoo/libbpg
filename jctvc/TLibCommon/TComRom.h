@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,19 +84,11 @@ extern       UInt   g_auiRasterToPelY[ MAX_NUM_SPU_W*MAX_NUM_SPU_W ];
 
 Void         initRasterToPelXY ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth );
 
-// global variable (CTU width/height, max. CU depth)
-extern       UInt g_uiMaxCUWidth;
-extern       UInt g_uiMaxCUHeight;
-extern       UInt g_uiMaxCUDepth;
-extern       UInt g_uiAddCUDepth;
-
-extern       UInt g_auiPUOffset[NUMBER_OF_PART_SIZES];
+extern const UInt g_auiPUOffset[NUMBER_OF_PART_SIZES];
 
 #define QUANT_SHIFT                14 // Q(4) = 2^14
 #define IQUANT_SHIFT                6
 #define SCALE_BITS                 15 // Inherited from TMuC, pressumably for fractional bit estimates in RDOQ
-
-extern Int g_maxTrDynamicRange[MAX_NUM_CHANNEL_TYPE];
 
 #define SQRT2                      11585
 #define SQRT2_SHIFT                13
@@ -107,8 +99,8 @@ extern Int g_maxTrDynamicRange[MAX_NUM_CHANNEL_TYPE];
 #define SHIFT_INV_1ST               7 // Shift after first inverse transform stage
 #define SHIFT_INV_2ND              12 // Shift after second inverse transform stage
 
-extern Int g_quantScales[SCALING_LIST_REM_NUM];             // Q(QP%6)
-extern Int g_invQuantScales[SCALING_LIST_REM_NUM];          // IQ(QP%6)
+extern const Int g_quantScales[SCALING_LIST_REM_NUM];             // Q(QP%6)
+extern const Int g_invQuantScales[SCALING_LIST_REM_NUM];          // IQ(QP%6)
 
 #if RExt__HIGH_PRECISION_FORWARD_TRANSFORM
 static const Int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = { 14, 6 };
@@ -152,16 +144,6 @@ extern const UInt   g_uiMinInGroup[ LAST_SIGNIFICANT_GROUPS ];
 extern const UChar  g_aucIntraModeNumFast[MAX_CU_DEPTH];
 
 extern const UChar  g_chroma422IntraAngleMappingTable[NUM_INTRA_MODE];
-
-// ====================================================================================================================
-// Bit-depth
-// ====================================================================================================================
-
-extern        Int g_bitDepth   [MAX_NUM_CHANNEL_TYPE];
-extern        Int g_PCMBitDepth[MAX_NUM_CHANNEL_TYPE];
-#if O0043_BEST_EFFORT_DECODING
-extern        Int g_bitDepthInStream   [MAX_NUM_CHANNEL_TYPE]; // In the encoder, this is the same as g_bitDepth. In the decoder, this can vary from g_bitDepth if the decoder is forced to use 'best-effort decoding' at a particular bit-depth.
-#endif
 
 // ====================================================================================================================
 // Mode-Dependent DST Matrices
@@ -224,13 +206,13 @@ extern UInt64 g_nSymbolCounter;
 extern const Char *MatrixType[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM];
 extern const Char *MatrixType_DC[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM];
 
-extern Int g_quantTSDefault4x4[4*4];
-extern Int g_quantIntraDefault8x8[8*8];
-extern Int g_quantInterDefault8x8[8*8];
+extern const Int g_quantTSDefault4x4[4*4];
+extern const Int g_quantIntraDefault8x8[8*8];
+extern const Int g_quantInterDefault8x8[8*8];
 
-extern UInt g_scalingListSize [SCALING_LIST_SIZE_NUM];
-extern UInt g_scalingListSizeX[SCALING_LIST_SIZE_NUM];
-extern UInt g_scalingListNum  [SCALING_LIST_SIZE_NUM];
+extern const UInt g_scalingListSize [SCALING_LIST_SIZE_NUM];
+extern const UInt g_scalingListSizeX[SCALING_LIST_SIZE_NUM];
+extern const UInt g_scalingListNum  [SCALING_LIST_SIZE_NUM];
 //! \}
 
 #endif  //__TCOMROM__

@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,10 +42,6 @@
 
 //! \ingroup TLibCommon
 //! \{
-
-#if ADAPTIVE_QP_SELECTION
-  TCoeff * TComDataCU::m_pcGlbArlCoeff[MAX_NUM_COMPONENT] = { NULL, NULL, NULL };
-#endif
 
 // ====================================================================================================================
 // Constructor / destructor / create / destroy
@@ -113,7 +109,7 @@ TComDataCU::~TComDataCU()
 
 Void TComDataCU::create( ChromaFormat chromaFormatIDC, UInt uiNumPartition, UInt uiWidth, UInt uiHeight, Bool bDecSubCu, Int unitSize
 #if ADAPTIVE_QP_SELECTION
-                        , Bool bGlobalRMARLBuffer
+                        , TCoeff *pParentARLBuffer
 #endif
                         )
 {
@@ -171,19 +167,16 @@ Void TComDataCU::create( ChromaFormat chromaFormatIDC, UInt uiNumPartition, UInt
       memset( m_pcTrCoeff[compID], 0, (totalSize * sizeof( TCoeff )) );
 
 #if ADAPTIVE_QP_SELECTION
-      if( bGlobalRMARLBuffer )
+      if( pParentARLBuffer != 0 )
       {
-        if (m_pcGlbArlCoeff[compID] == NULL)
-        {
-          m_pcGlbArlCoeff[compID] = (TCoeff*)xMalloc(TCoeff, totalSize);
-        }
-
-        m_pcArlCoeff[compID] = m_pcGlbArlCoeff[compID];
+        m_pcArlCoeff[compID] = pParentARLBuffer;
         m_ArlCoeffIsAliasedAllocation = true;
+        pParentARLBuffer += totalSize;
       }
       else
       {
         m_pcArlCoeff[compID] = (TCoeff*)xMalloc(TCoeff, totalSize);
+        m_ArlCoeffIsAliasedAllocation = false;
       }
 #endif
       m_pcIPCMSample[compID] = (Pel*   )xMalloc(Pel , totalSize);
@@ -335,12 +328,6 @@ Void TComDataCU::destroy()
           m_pcArlCoeff[comp] = NULL;
         }
       }
-
-      if ( m_pcGlbArlCoeff[comp] )
-      {
-        xFree(m_pcGlbArlCoeff[comp]);
-        m_pcGlbArlCoeff[comp] = NULL;
-      }
 #endif
 
       if ( m_pcIPCMSample[comp] )
@@ -417,12 +404,11 @@ Bool TComDataCU::CUIsFromSameSliceTileAndWavefrontRow( const TComDataCU *pCU /* 
 
 Bool TComDataCU::isLastSubCUOfCtu(const UInt absPartIdx)
 {
-  TComPic* pcPic = getPic();
-  TComSlice * pcSlice = pcPic->getSlice(pcPic->getCurrSliceIdx());
+  const TComSPS &sps=*(getSlice()->getSPS());
 
-  const UInt picWidth = pcSlice->getSPS()->getPicWidthInLumaSamples();
-  const UInt picHeight = pcSlice->getSPS()->getPicHeightInLumaSamples();
-  const UInt granularityWidth = g_uiMaxCUWidth;
+  const UInt picWidth = sps.getPicWidthInLumaSamples();
+  const UInt picHeight = sps.getPicHeightInLumaSamples();
+  const UInt granularityWidth = sps.getMaxCUWidth();
 
   const UInt cuPosX = getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[absPartIdx] ];
   const UInt cuPosY = getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[absPartIdx] ];
@@ -440,21 +426,21 @@ Bool TComDataCU::isLastSubCUOfCtu(const UInt absPartIdx)
 // --------------------------------------------------------------------------------------------------------------------
 
 /**
- - initialize top-level CU
- - internal buffers are already created
- - set values before encoding a CU
- .
- \param  pcPic     picture (TComPic) class pointer
- \param  iCUAddr   CU address
+ Initialize top-level CU: create internal buffers and set initial values before encoding the CTU.
+
+ \param  pcPic       picture (TComPic) class pointer
+ \param  ctuRsAddr   CTU address in raster scan order
  */
 Void TComDataCU::initCtu( TComPic* pcPic, UInt ctuRsAddr )
 {
 
+  const UInt maxCUWidth = pcPic->getPicSym()->getSPS().getMaxCUWidth();
+  const UInt maxCUHeight= pcPic->getPicSym()->getSPS().getMaxCUHeight();
   m_pcPic              = pcPic;
   m_pcSlice            = pcPic->getSlice(pcPic->getCurrSliceIdx());
   m_ctuRsAddr          = ctuRsAddr;
-  m_uiCUPelX           = ( ctuRsAddr % pcPic->getFrameWidthInCtus() ) * g_uiMaxCUWidth;
-  m_uiCUPelY           = ( ctuRsAddr / pcPic->getFrameWidthInCtus() ) * g_uiMaxCUHeight;
+  m_uiCUPelX           = ( ctuRsAddr % pcPic->getFrameWidthInCtus() ) * maxCUWidth;
+  m_uiCUPelY           = ( ctuRsAddr / pcPic->getFrameWidthInCtus() ) * maxCUHeight;
   m_absZIdxInCtu       = 0;
   m_dTotalCost         = MAX_DOUBLE;
   m_uiTotalDistortion  = 0;
@@ -469,8 +455,8 @@ Void TComDataCU::initCtu( TComPic* pcPic, UInt ctuRsAddr )
   memset( m_CUTransquantBypass, false,                      m_uiNumPartition * sizeof( *m_CUTransquantBypass) );
   memset( m_puhDepth          , 0,                          m_uiNumPartition * sizeof( *m_puhDepth ) );
   memset( m_puhTrIdx          , 0,                          m_uiNumPartition * sizeof( *m_puhTrIdx ) );
-  memset( m_puhWidth          , g_uiMaxCUWidth,             m_uiNumPartition * sizeof( *m_puhWidth ) );
-  memset( m_puhHeight         , g_uiMaxCUHeight,            m_uiNumPartition * sizeof( *m_puhHeight ) );
+  memset( m_puhWidth          , maxCUWidth,                 m_uiNumPartition * sizeof( *m_puhWidth ) );
+  memset( m_puhHeight         , maxCUHeight,                m_uiNumPartition * sizeof( *m_puhHeight ) );
   for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
   {
     const RefPicList rpl=RefPicList(i);
@@ -495,7 +481,7 @@ Void TComDataCU::initCtu( TComPic* pcPic, UInt ctuRsAddr )
   memset( m_puhInterDir       , 0,                        m_uiNumPartition * sizeof( *m_puhInterDir ) );
   memset( m_pbIPCMFlag        , false,                    m_uiNumPartition * sizeof( *m_pbIPCMFlag ) );
 
-  const UInt numCoeffY    = g_uiMaxCUWidth*g_uiMaxCUHeight;
+  const UInt numCoeffY    = maxCUWidth*maxCUHeight;
   for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
   {
     const UInt componentShift = m_pcPic->getComponentScaleX(ComponentID(comp)) + m_pcPic->getComponentScaleY(ComponentID(comp));
@@ -554,12 +540,14 @@ Void TComDataCU::initCtu( TComPic* pcPic, UInt ctuRsAddr )
 }
 
 
-/** initialize prediction data with enabling sub-CTU-level delta QP
-*\param  uiDepth  depth of the current CU
-*\param  qp     qp for the current CU
-*- set CU width and CU height according to depth
-*- set qp value according to input qp
-*- set last-coded qp value according to input last-coded qp
+/** Initialize prediction data with enabling sub-CTU-level delta QP.
+*   - set CU width and CU height according to depth
+*   - set qp value according to input qp
+*   - set last-coded qp value according to input last-coded qp
+*
+* \param  uiDepth            depth of the current CU
+* \param  qp                 qp for the current CU
+* \param  bTransquantBypass  true for transquant bypass
 */
 Void TComDataCU::initEstData( const UInt uiDepth, const Int qp, const Bool bTransquantBypass )
 {
@@ -568,8 +556,8 @@ Void TComDataCU::initEstData( const UInt uiDepth, const Int qp, const Bool bTran
   m_uiTotalBits        = 0;
   m_uiTotalBins        = 0;
 
-  UChar uhWidth  = g_uiMaxCUWidth  >> uiDepth;
-  UChar uhHeight = g_uiMaxCUHeight >> uiDepth;
+  const UChar uhWidth  = getSlice()->getSPS()->getMaxCUWidth()  >> uiDepth;
+  const UChar uhHeight = getSlice()->getSPS()->getMaxCUHeight() >> uiDepth;
 
   for (UInt ui = 0; ui < m_uiNumPartition; ui++)
   {
@@ -639,12 +627,15 @@ Void TComDataCU::initSubCU( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth, 
   UInt uiPartOffset = ( pcCU->getTotalNumPart()>>2 )*uiPartUnitIdx;
 
   m_pcPic              = pcCU->getPic();
-  m_pcSlice            = m_pcPic->getSlice(m_pcPic->getCurrSliceIdx());
+  m_pcSlice            = pcCU->getSlice();
   m_ctuRsAddr          = pcCU->getCtuRsAddr();
   m_absZIdxInCtu       = pcCU->getZorderIdxInCtu() + uiPartOffset;
 
-  m_uiCUPelX           = pcCU->getCUPelX() + ( g_uiMaxCUWidth>>uiDepth  )*( uiPartUnitIdx &  1 );
-  m_uiCUPelY           = pcCU->getCUPelY() + ( g_uiMaxCUHeight>>uiDepth  )*( uiPartUnitIdx >> 1 );
+  const UChar uhWidth  = getSlice()->getSPS()->getMaxCUWidth()  >> uiDepth;
+  const UChar uhHeight = getSlice()->getSPS()->getMaxCUHeight() >> uiDepth;
+
+  m_uiCUPelX           = pcCU->getCUPelX() + ( uhWidth )*( uiPartUnitIdx &  1 );
+  m_uiCUPelY           = pcCU->getCUPelY() + ( uhHeight)*( uiPartUnitIdx >> 1 );
 
   m_dTotalCost         = MAX_DOUBLE;
   m_uiTotalDistortion  = 0;
@@ -676,9 +667,6 @@ Void TComDataCU::initSubCU( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth, 
   }
 
   memset( m_puhDepth,     uiDepth, iSizeInUchar );
-
-  UChar uhWidth  = g_uiMaxCUWidth  >> uiDepth;
-  UChar uhHeight = g_uiMaxCUHeight >> uiDepth;
   memset( m_puhWidth,          uhWidth,  iSizeInUchar );
   memset( m_puhHeight,         uhHeight, iSizeInUchar );
   memset( m_pbIPCMFlag,        0, iSizeInBool  );
@@ -727,11 +715,11 @@ Void TComDataCU::initSubCU( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth, 
 
 Void TComDataCU::setOutsideCUPart( UInt uiAbsPartIdx, UInt uiDepth )
 {
-  UInt uiNumPartition = m_uiNumPartition >> (uiDepth << 1);
-  UInt uiSizeInUchar = sizeof( UChar  ) * uiNumPartition;
-
-  UChar uhWidth  = g_uiMaxCUWidth  >> uiDepth;
-  UChar uhHeight = g_uiMaxCUHeight >> uiDepth;
+  const UInt     uiNumPartition = m_uiNumPartition >> (uiDepth << 1);
+  const UInt     uiSizeInUchar  = sizeof( UChar  ) * uiNumPartition;
+  const TComSPS &sps            = *(getSlice()->getSPS());
+  const UChar    uhWidth        = sps.getMaxCUWidth()  >> uiDepth;
+  const UChar    uhHeight       = sps.getMaxCUHeight() >> uiDepth;
   memset( m_puhDepth    + uiAbsPartIdx,     uiDepth,  uiSizeInUchar );
   memset( m_puhWidth    + uiAbsPartIdx,     uhWidth,  uiSizeInUchar );
   memset( m_puhHeight   + uiAbsPartIdx,     uhHeight, uiSizeInUchar );
@@ -935,7 +923,7 @@ Void TComDataCU::copyPartFrom( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDept
     m_acCUMvField[rpl].copyFrom( pcCU->getCUMvField( rpl ), pcCU->getTotalNumPart(), uiOffset );
   }
 
-  const UInt numCoeffY = g_uiMaxCUWidth*g_uiMaxCUHeight >> (uiDepth<<1);
+  const UInt numCoeffY = (pcCU->getSlice()->getSPS()->getMaxCUWidth()*pcCU->getSlice()->getSPS()->getMaxCUHeight()) >> (uiDepth<<1);
   const UInt offsetY   = uiPartUnitIdx*numCoeffY;
   for (UInt ch=0; ch<numValidComp; ch++)
   {
@@ -1013,7 +1001,7 @@ Void TComDataCU::copyToPic( UChar uhDepth )
 
   memcpy( pCtu->getIPCMFlag() + m_absZIdxInCtu, m_pbIPCMFlag,         iSizeInBool  );
 
-  const UInt numCoeffY    = (g_uiMaxCUWidth*g_uiMaxCUHeight)>>(uhDepth<<1);
+  const UInt numCoeffY    = (pCtu->getSlice()->getSPS()->getMaxCUWidth()*pCtu->getSlice()->getSPS()->getMaxCUHeight())>>(uhDepth<<1);
   const UInt offsetY      = m_absZIdxInCtu*m_pcPic->getMinCUWidth()*m_pcPic->getMinCUHeight();
   for (UInt comp=0; comp<numValidComp; comp++)
   {
@@ -1357,7 +1345,10 @@ TComDataCU* TComDataCU::getPUAboveRightAdi(UInt&  uiARPartUnitIdx, UInt uiCurrPa
 TComDataCU* TComDataCU::getQpMinCuLeft( UInt& uiLPartUnitIdx, UInt uiCurrAbsIdxInCtu )
 {
   const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
-  UInt absZorderQpMinCUIdx = (uiCurrAbsIdxInCtu>>((g_uiMaxCUDepth - getSlice()->getPPS()->getMaxCuDQPDepth())<<1))<<((g_uiMaxCUDepth -getSlice()->getPPS()->getMaxCuDQPDepth())<<1);
+  const UInt maxCUDepth        = getSlice()->getSPS()->getMaxTotalCUDepth();
+  const UInt maxCuDQPDepth     = getSlice()->getPPS()->getMaxCuDQPDepth();
+  const UInt doubleDepthDifference = ((maxCUDepth - maxCuDQPDepth)<<1);
+  UInt absZorderQpMinCUIdx = (uiCurrAbsIdxInCtu>>doubleDepthDifference)<<doubleDepthDifference;
   UInt absRorderQpMinCUIdx = g_auiZscanToRaster[absZorderQpMinCUIdx];
 
   // check for left CTU boundary
@@ -1381,7 +1372,10 @@ TComDataCU* TComDataCU::getQpMinCuLeft( UInt& uiLPartUnitIdx, UInt uiCurrAbsIdxI
 TComDataCU* TComDataCU::getQpMinCuAbove( UInt& uiAPartUnitIdx, UInt uiCurrAbsIdxInCtu )
 {
   const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
-  UInt absZorderQpMinCUIdx = (uiCurrAbsIdxInCtu>>((g_uiMaxCUDepth - getSlice()->getPPS()->getMaxCuDQPDepth())<<1))<<((g_uiMaxCUDepth - getSlice()->getPPS()->getMaxCuDQPDepth())<<1);
+  const UInt maxCUDepth        = getSlice()->getSPS()->getMaxTotalCUDepth();
+  const UInt maxCuDQPDepth     = getSlice()->getPPS()->getMaxCuDQPDepth();
+  const UInt doubleDepthDifference = ((maxCUDepth - maxCuDQPDepth)<<1);
+  UInt absZorderQpMinCUIdx = (uiCurrAbsIdxInCtu>>doubleDepthDifference)<<doubleDepthDifference;
   UInt absRorderQpMinCUIdx = g_auiZscanToRaster[absZorderQpMinCUIdx];
 
   // check for top CTU boundary
@@ -1426,7 +1420,7 @@ Int TComDataCU::getLastValidPartIdx( Int iAbsPartIdx )
 
 Char TComDataCU::getLastCodedQP( UInt uiAbsPartIdx )
 {
-  UInt uiQUPartIdxMask = ~((1<<((g_uiMaxCUDepth - getSlice()->getPPS()->getMaxCuDQPDepth())<<1))-1);
+  UInt uiQUPartIdxMask = ~((1<<((getSlice()->getSPS()->getMaxTotalCUDepth() - getSlice()->getPPS()->getMaxCuDQPDepth())<<1))-1);
   Int iLastValidPartIdx = getLastValidPartIdx( uiAbsPartIdx&uiQUPartIdxMask ); // A idx will be invalid if it is off the right or bottom edge of the picture.
   // If this CU is in the first CTU of the slice and there is no valid part before this one, use slice QP
   if ( getPic()->getPicSym()->getCtuTsToRsAddrMap(getSlice()->getSliceCurStartCtuTsAddr()) == getCtuRsAddr() && Int(getZorderIdxInCtu())+iLastValidPartIdx<0)
@@ -1460,8 +1454,8 @@ Char TComDataCU::getLastCodedQP( UInt uiAbsPartIdx )
 }
 
 
-/** Check whether the CU is coded in lossless coding mode
- * \param   uiAbsPartIdx
+/** Check whether the CU is coded in lossless coding mode.
+ * \param   absPartIdx
  * \returns true if the CU is coded in lossless coding mode; false if otherwise
  */
 Bool TComDataCU::isLosslessCoded(UInt absPartIdx)
@@ -1471,10 +1465,10 @@ Bool TComDataCU::isLosslessCoded(UInt absPartIdx)
 
 
 /** Get allowed chroma intra modes
-*\param   uiAbsPartIdx
-*\param   uiModeList  pointer to chroma intra modes array
-*\returns
-*- fill uiModeList with chroma intra modes
+*   - fills uiModeList with chroma intra modes
+*
+*\param   [in]  uiAbsPartIdx
+*\param   [out] uiModeList pointer to chroma intra modes array
 */
 Void TComDataCU::getAllowedChromaDir( UInt uiAbsPartIdx, UInt uiModeList[NUM_CHROMA_MODE] )
 {
@@ -1498,8 +1492,9 @@ Void TComDataCU::getAllowedChromaDir( UInt uiAbsPartIdx, UInt uiModeList[NUM_CHR
 }
 
 /** Get most probable intra modes
-*\param   uiAbsPartIdx
+*\param   uiAbsPartIdx    partition index
 *\param   uiIntraDirPred  pointer to the array for MPM storage
+*\param   compID          colour component ID
 *\param   piMode          it is set with MPM mode in case both MPM are equal. It is used to restrict RD search at encode side.
 *\returns Number of MPM
 */
@@ -1509,6 +1504,8 @@ Void TComDataCU::getIntraDirPredictor( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM
   UInt        LeftPartIdx  = MAX_UINT;
   UInt        AbovePartIdx = MAX_UINT;
   Int         iLeftIntraDir, iAboveIntraDir;
+  const TComSPS *sps=getSlice()->getSPS();
+  const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
 
   const ChannelType chType = toChannelType(compID);
   const ChromaFormat chForm = getPic()->getChromaFormat();
@@ -1517,7 +1514,7 @@ Void TComDataCU::getIntraDirPredictor( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM
 
   if (isChroma(compID))
   {
-    LeftPartIdx = getChromasCorrespondingPULumaIdx(LeftPartIdx, chForm);
+    LeftPartIdx = getChromasCorrespondingPULumaIdx(LeftPartIdx, chForm, partsPerMinCU);
   }
   iLeftIntraDir  = pcCULeft ? ( pcCULeft->isIntra( LeftPartIdx ) ? pcCULeft->getIntraDir( chType, LeftPartIdx ) : DC_IDX ) : DC_IDX;
 
@@ -1526,7 +1523,7 @@ Void TComDataCU::getIntraDirPredictor( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM
 
   if (isChroma(compID))
   {
-    AbovePartIdx = getChromasCorrespondingPULumaIdx(AbovePartIdx, chForm);
+    AbovePartIdx = getChromasCorrespondingPULumaIdx(AbovePartIdx, chForm, partsPerMinCU);
   }
   iAboveIntraDir = pcCUAbove ? ( pcCUAbove->isIntra( AbovePartIdx ) ? pcCUAbove->getIntraDir( chType, AbovePartIdx ) : DC_IDX ) : DC_IDX;
 
@@ -1692,12 +1689,11 @@ Void TComDataCU::setCbfSubParts( UInt uiCbf, ComponentID compID, UInt uiAbsPartI
 }
 
 /** Sets a coded block flag for all sub-partitions of a partition
- * \param uiCbf The value of the coded block flag to be set
- * \param eTType
+ * \param uiCbf          The value of the coded block flag to be set
+ * \param compID
  * \param uiAbsPartIdx
  * \param uiPartIdx
  * \param uiDepth
- * \returns Void
  */
 Void TComDataCU::setCbfSubParts ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth )
 {
@@ -2220,12 +2216,11 @@ Void TComDataCU::deriveLeftBottomIdx( UInt  uiPartIdx,      UInt&      ruiPartId
   }
 }
 
-/** Derives the partition index of neighbouring bottom right block
- * \param [in]  eCUMode
- * \param [in]  uiPartIdx
- * \param [out] ruiPartIdxRB
+/** Derive the partition index of neighbouring bottom right block
+ * \param [in]  uiPartIdx     current partition index
+ * \param [out] ruiPartIdxRB  partition index of neighbouring bottom right block
  */
-Void TComDataCU::deriveRightBottomIdx( UInt  uiPartIdx,      UInt&      ruiPartIdxRB )
+Void TComDataCU::deriveRightBottomIdx( UInt uiPartIdx, UInt &ruiPartIdxRB )
 {
   ruiPartIdxRB      = g_auiRasterToZscan [g_auiZscanToRaster[ m_absZIdxInCtu ] + ( ((m_puhHeight[0] / m_pcPic->getMinCUHeight())>>1) - 1)*m_pcPic->getNumPartInCtuWidth() +  m_puhWidth[0] / m_pcPic->getMinCUWidth() - 1];
 
@@ -2302,14 +2297,7 @@ Bool TComDataCU::hasEqualMotion( UInt uiAbsPartIdx, TComDataCU* pcCandCU, UInt u
   return true;
 }
 
-/** Constructs a list of merging candidates
- * \param uiAbsPartIdx
- * \param uiPUIdx
- * \param uiDepth
- * \param pcMvFieldNeighbours
- * \param puhInterDirNeighbours
- * \param numValidMergeCand
- */
+//! Construct a list of merging candidates
 Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComMvField* pcMvFieldNeighbours, UChar* puhInterDirNeighbours, Int& numValidMergeCand, Int mrgCandIdx )
 {
   UInt uiAbsPartAddr = m_absZIdxInCtu + uiAbsPartIdx;
@@ -2660,9 +2648,8 @@ Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComM
 }
 
 /** Check whether the current PU and a spatial neighboring PU are in a same ME region.
- * \param xN, xN   location of the upper-left corner pixel of a neighboring PU
+ * \param xN, yN   location of the upper-left corner pixel of a neighboring PU
  * \param xP, yP   location of the upper-left corner pixel of the current PU
- * \returns Bool
  */
 Bool TComDataCU::isDiffMER(Int xN, Int yN, Int xP, Int yP)
 {
@@ -2679,11 +2666,10 @@ Bool TComDataCU::isDiffMER(Int xN, Int yN, Int xP, Int yP)
   return false;
 }
 
-/** calculate the location of upper-left corner pixel and size of the current PU.
- * \param partIdx  PU index within a CU
- * \param xP, yP   location of the upper-left corner pixel of the current PU
- * \param PSW, nPSH    size of the curren PU
- * \returns Void
+/** Calculate the location of upper-left corner pixel and size of the current PU.
+ * \param partIdx       PU index within a CU
+ * \param xP, yP        location of the upper-left corner pixel of the current PU
+ * \param nPSW, nPSH    size of the current PU
  */
 Void TComDataCU::getPartPosition( UInt partIdx, Int& xP, Int& yP, Int& nPSW, Int& nPSH)
 {
@@ -2920,13 +2906,14 @@ Bool TComDataCU::isBipredRestriction(UInt puIdx)
 
 Void TComDataCU::clipMv    (TComMv&  rcMv)
 {
+  const TComSPS &sps=*(m_pcSlice->getSPS());
   Int  iMvShift = 2;
   Int iOffset = 8;
-  Int iHorMax = ( m_pcSlice->getSPS()->getPicWidthInLumaSamples() + iOffset - m_uiCUPelX - 1 ) << iMvShift;
-  Int iHorMin = (       -(Int)g_uiMaxCUWidth - iOffset - (Int)m_uiCUPelX + 1 ) << iMvShift;
+  Int iHorMax = ( sps.getPicWidthInLumaSamples() + iOffset - (Int)m_uiCUPelX - 1 ) << iMvShift;
+  Int iHorMin = (      -(Int)sps.getMaxCUWidth() - iOffset - (Int)m_uiCUPelX + 1 ) << iMvShift;
 
-  Int iVerMax = ( m_pcSlice->getSPS()->getPicHeightInLumaSamples() + iOffset - m_uiCUPelY - 1 ) << iMvShift;
-  Int iVerMin = (       -(Int)g_uiMaxCUHeight - iOffset - (Int)m_uiCUPelY + 1 ) << iMvShift;
+  Int iVerMax = ( sps.getPicHeightInLumaSamples() + iOffset - (Int)m_uiCUPelY - 1 ) << iMvShift;
+  Int iVerMin = (      -(Int)sps.getMaxCUHeight() - iOffset - (Int)m_uiCUPelY + 1 ) << iMvShift;
 
   rcMv.setHor( min (iHorMax, max (iHorMin, rcMv.getHor())) );
   rcMv.setVer( min (iVerMax, max (iVerMin, rcMv.getVer())) );
@@ -2966,9 +2953,9 @@ Void TComDataCU::setIPCMFlagSubParts  (Bool bIpcmFlag, UInt uiAbsPartIdx, UInt u
   memset(m_pbIPCMFlag + uiAbsPartIdx, bIpcmFlag, sizeof(Bool)*uiCurrPartNumb );
 }
 
-/** Test whether the current block is skipped
- * \param uiPartIdx Block index
- * \returns Flag indicating whether the block is skipped
+/** Test whether the block at uiPartIdx is skipped.
+ * \param uiPartIdx Partition index
+ * \returns true if the current the block is skipped
  */
 Bool TComDataCU::isSkipped( UInt uiPartIdx )
 {
@@ -3190,13 +3177,6 @@ Bool TComDataCU::xAddMVPCandOrder( AMVPInfo* pInfo, RefPicList eRefPicList, Int 
   return false;
 }
 
-/**
- * \param eRefPicList
- * \param uiCUAddr
- * \param uiPartUnitIdx
- * \param riRefIdx
- * \returns Bool
- */
 Bool TComDataCU::xGetColMVP( RefPicList eRefPicList, Int ctuRsAddr, Int uiPartUnitIdx, TComMv& rcMv, Int& riRefIdx )
 {
   UInt uiAbsPartAddr = uiPartUnitIdx;
@@ -3310,12 +3290,6 @@ Int TComDataCU::xGetDistScaleFactor(Int iCurrPOC, Int iCurrRefPOC, Int iColPOC, 
   }
 }
 
-/**
- * \param eCUMode
- * \param uiPartIdx
- * \param ruiPartIdxCenter
- * \returns Void
- */
 Void TComDataCU::xDeriveCenterIdx( UInt uiPartIdx, UInt& ruiPartIdxCenter )
 {
   UInt uiPartAddr;
@@ -3374,7 +3348,9 @@ UInt TComDataCU::getCoefScanIdx(const UInt uiAbsPartIdx, const UInt uiWidth, con
 
   if (uiDirMode==DM_CHROMA_IDX)
   {
-    uiDirMode = getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, getPic()->getChromaFormat()));
+    const TComSPS *sps=getSlice()->getSPS();
+    const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+    uiDirMode = getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, getPic()->getChromaFormat(), partsPerMinCU));
   }
 
   if (isChroma(compID) && (format == CHROMA_422))

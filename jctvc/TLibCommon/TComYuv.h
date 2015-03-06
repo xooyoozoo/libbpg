@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,6 @@
 
 #ifndef __TCOMYUV__
 #define __TCOMYUV__
-#include <assert.h>
 #include "CommonDef.h"
 #include "TComPicYuv.h"
 #include "TComRectangle.h"
@@ -131,13 +130,13 @@ public:
   // ------------------------------------------------------------------------------------------------------------------
 
   //  Clip(pcYuvSrc0 + pcYuvSrc1) -> m_apiBuf
-  Void         addClip                    ( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize );
+  Void         addClip                    ( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize, const BitDepths &clipBitDepths );
 
   //  pcYuvSrc0 - pcYuvSrc1 -> m_apiBuf
   Void         subtract                   ( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize );
 
   //  (pcYuvSrc0 + pcYuvSrc1)/2 for YUV partition
-  Void         addAvg                     ( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt iPartUnitIdx, const UInt iWidth, const UInt iHeight );
+  Void         addAvg                     ( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt iPartUnitIdx, const UInt iWidth, const UInt iHeight, const BitDepths &clipBitDepths );
 
   Void         removeHighFreq             ( const TComYuv* pcYuvSrc, const UInt uiPartIdx, const UInt uiWidth, const UInt uiHeight );
 

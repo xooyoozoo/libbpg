@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,6 @@
 #include <stdint.h>
 #include <vector>
 #include <stdio.h>
-#include <assert.h>
 #include "CommonDef.h"
 
 //! \ingroup TLibCommon
@@ -175,9 +174,9 @@ protected:
 
 public:
   /**
-   * Create a new bitstream reader object that reads from #buf#.  Ownership
-   * of #buf# remains with the callee, although the constructed object
-   * will hold a reference to #buf#
+   * Create a new bitstream reader object that reads from buf.  Ownership
+   * of buf remains with the callee, although the constructed object
+   * will hold a reference to buf
    */
   TComInputBitstream(std::vector<uint8_t>* buf);
   ~TComInputBitstream();

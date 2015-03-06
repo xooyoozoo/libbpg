@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@
     \brief    Handle encoder configuration parameters
 */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <cassert>
 #include <cstring>
@@ -683,11 +684,13 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
   SMultiValueInput<Bool> cfg_timeCodeSeiHoursFlag            (0,  1, 0, MAX_TIMECODE_SEI_SETS);
   SMultiValueInput<Int>  cfg_timeCodeSeiTimeOffsetLength     (0, 31, 0, MAX_TIMECODE_SEI_SETS);
   SMultiValueInput<Int>  cfg_timeCodeSeiTimeOffsetValue      (std::numeric_limits<Int>::min(), std::numeric_limits<Int>::max(), 0, MAX_TIMECODE_SEI_SETS);
+  Int warnUnknowParameter = 0;
 
   po::Options opts;
   opts.addOptions()
   ("help",                                            do_help,                                          false, "this help text")
   ("c",    po::parseConfigFile, "configuration file name")
+  ("WarnUnknowParameter,w",                           warnUnknowParameter,                                  0, "warn for unknown configuration parameters instead of failing")
 
   // File, I/O and source parameters
   ("InputFile,i",                                     cfg_InputFile,                               string(""), "Original YUV input file name")
@@ -806,6 +809,9 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
   ("dQPFile,m",                                       cfg_dQPFile,                                 string(""), "dQP file name")
   ("RDOQ",                                            m_useRDOQ,                                         true)
   ("RDOQTS",                                          m_useRDOQTS,                                       true)
+#if T0196_SELECTIVE_RDOQ
+  ("SelectiveRDOQ",                                   m_useSelectiveRDOQ,                               false, "Enable selective RDOQ")
+#endif
   ("RDpenalty",                                       m_rdPenalty,                                          0,  "RD-penalty for 32x32 TU for intra in non-intra slices. 0:disabled  1:RD-penalty  2:maximum RD-penalty")
 
   // Deblocking filter parameters
@@ -879,7 +885,6 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
                                                                                                                "\t2: CRC\n"
                                                                                                                "\t1: use MD5\n"
                                                                                                                "\t0: disable")
-  ("SEIpictureDigest",                                m_decodedPictureHashSEIEnabled,                       0, "deprecated alias for SEIDecodedPictureHash")
   ("TMVPMode",                                        m_TMVPModeId,                                         1, "TMVP mode 0: TMVP disable for all slices. 1: TMVP enable for all slices (default) 2: TMVP enable for certain slices only")
   ("FEN",                                             m_bUseFastEnc,                                    false, "fast encoder setting")
   ("ECU",                                             m_bUseEarlyCU,                                    false, "Early CU setting")
@@ -1048,7 +1053,8 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
     opts.addOptions()(cOSS.str(), m_GOPList[i-1], GOPEntry());
   }
   po::setDefaults(opts);
-  const list<const Char*>& argv_unhandled = po::scanArgv(opts, argc, (const Char**) argv);
+  po::ErrorReporter err;
+  const list<const Char*>& argv_unhandled = po::scanArgv(opts, argc, (const Char**) argv, err);
 
   for (list<const Char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++)
   {
@@ -1060,6 +1066,15 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
     /* argc == 1: no options have been specified */
     po::doHelp(cout, opts);
     return false;
+  }
+
+  if (err.is_errored)
+  {
+    if (!warnUnknowParameter)
+    {
+      /* error report has already been printed on stderr */
+      return false;
+    }
   }
 
   /*
@@ -1449,8 +1464,16 @@ Bool TAppEncCfg::parseCfg( Int argc, Char* argv[] )
   // check validity of input parameters
   xCheckParameter();
 
-  // set global varibles
-  xSetGlobal();
+  // compute actual CU depth with respect to config depth and max transform size
+  UInt uiAddCUDepth  = 0;
+  while( (m_uiMaxCUWidth>>m_uiMaxCUDepth) > ( 1 << ( m_uiQuadtreeTULog2MinSize + uiAddCUDepth )  ) )
+  {
+    uiAddCUDepth++;
+  }
+
+  m_uiMaxTotalCUDepth = m_uiMaxCUDepth + uiAddCUDepth + getMaxCUDepthOffset(m_chromaFormatIDC, m_uiQuadtreeTULog2MinSize); // if minimum TU larger than 4x4, allow for additional part indices for 4:2:2 SubTUs.
+  uiAddCUDepth++;
+  m_uiLog2DiffMaxMinCodingBlockSize = m_uiMaxCUDepth - 1;
 
   // print-out parameters
   if (m_verboseLevel) {
@@ -2219,7 +2242,7 @@ Void TAppEncCfg::xCheckParameter()
 
   if((m_numTileColumnsMinus1 <= 0) && (m_numTileRowsMinus1 <= 0) && m_tmctsSEIEnabled)
   {
-    printf("SEITempMotionConstrainedTileSets is set to false to disable 'temporal_motion_constrained_tile_sets' SEI because there are no tiles enabled\n");
+    printf("Warning: SEITempMotionConstrainedTileSets is set to false to disable temporal motion-constrained tile sets SEI message because there are no tiles enabled.\n");
     m_tmctsSEIEnabled = false;
   }
 
@@ -2232,40 +2255,6 @@ Void TAppEncCfg::xCheckParameter()
   if (check_failed)
   {
     exit(EXIT_FAILURE);
-  }
-}
-
-/** \todo use of global variables should be removed later
- */
-Void TAppEncCfg::xSetGlobal()
-{
-  // set max CU width & height
-  g_uiMaxCUWidth  = m_uiMaxCUWidth;
-  g_uiMaxCUHeight = m_uiMaxCUHeight;
-
-  // compute actual CU depth with respect to config depth and max transform size
-  g_uiAddCUDepth  = 0;
-  while( (m_uiMaxCUWidth>>m_uiMaxCUDepth) > ( 1 << ( m_uiQuadtreeTULog2MinSize + g_uiAddCUDepth )  ) )
-  {
-    g_uiAddCUDepth++;
-  }
-
-  g_uiAddCUDepth+=getMaxCUDepthOffset(m_chromaFormatIDC, m_uiQuadtreeTULog2MinSize); // if minimum TU larger than 4x4, allow for additional part indices for 4:2:2 SubTUs.
-
-  m_uiMaxCUDepth += g_uiAddCUDepth;
-  g_uiAddCUDepth++;
-  g_uiMaxCUDepth = m_uiMaxCUDepth;
-
-  // set internal bit-depth and constants
-  for (UInt channelType = 0; channelType < MAX_NUM_CHANNEL_TYPE; channelType++)
-  {
-#if O0043_BEST_EFFORT_DECODING
-    g_bitDepthInStream[channelType] = g_bitDepth[channelType] = m_internalBitDepth[channelType];
-#else
-    g_bitDepth   [channelType] = m_internalBitDepth[channelType];
-#endif
-    g_PCMBitDepth[channelType] = m_bPCMInputBitDepthFlag ? m_MSBExtendedBitDepth[channelType] : m_internalBitDepth[channelType];
-    g_maxTrDynamicRange[channelType] = m_useExtendedPrecision? std::max<Int>(15, (g_bitDepth[channelType] + 6)) : 15;
   }
 }
 
@@ -2333,7 +2322,7 @@ Void TAppEncCfg::xPrintParameter()
   {
     printf("Profile                           : %s\n", profileToString(m_profile) );
   }
-  printf("CU size / depth                   : %d / %d\n", m_uiMaxCUWidth, m_uiMaxCUDepth );
+  printf("CU size / depth / total-depth     : %d / %d / %d\n", m_uiMaxCUWidth, m_uiMaxCUDepth, m_uiMaxTotalCUDepth );
   printf("RQT trans. size (min / max)       : %d / %d\n", 1 << m_uiQuadtreeTULog2MinSize, 1 << m_uiQuadtreeTULog2MaxSize );
   printf("Max RQT depth inter               : %d\n", m_uiQuadtreeTUMaxDepthInter);
   printf("Max RQT depth intra               : %d\n", m_uiQuadtreeTUMaxDepthIntra);
@@ -2352,7 +2341,8 @@ Void TAppEncCfg::xPrintParameter()
   printf("Input bit depth                   : (Y:%d, C:%d)\n", m_inputBitDepth[CHANNEL_TYPE_LUMA], m_inputBitDepth[CHANNEL_TYPE_CHROMA] );
   printf("MSB-extended bit depth            : (Y:%d, C:%d)\n", m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA], m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA] );
   printf("Internal bit depth                : (Y:%d, C:%d)\n", m_internalBitDepth[CHANNEL_TYPE_LUMA], m_internalBitDepth[CHANNEL_TYPE_CHROMA] );
-  printf("PCM sample bit depth              : (Y:%d, C:%d)\n", g_PCMBitDepth[CHANNEL_TYPE_LUMA],      g_PCMBitDepth[CHANNEL_TYPE_CHROMA] );
+  printf("PCM sample bit depth              : (Y:%d, C:%d)\n", m_bPCMInputBitDepthFlag ? m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA] : m_internalBitDepth[CHANNEL_TYPE_LUMA],
+                                                               m_bPCMInputBitDepthFlag ? m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA] : m_internalBitDepth[CHANNEL_TYPE_CHROMA] );
   printf("Extended precision processing     : %s\n", (m_useExtendedPrecision                   ? "Enabled" : "Disabled") );
   printf("Intra reference smoothing         : %s\n", (m_enableIntraReferenceSmoothing          ? "Enabled" : "Disabled") );
   printf("Implicit residual DPCM            : %s\n", (m_useResidualDPCM[RDPCM_SIGNAL_IMPLICIT] ? "Enabled" : "Disabled") );
@@ -2394,7 +2384,7 @@ Void TAppEncCfg::xPrintParameter()
   printf("\n");
 
   printf("TOOL CFG: ");
-  printf("IBD:%d ", ((g_bitDepth[CHANNEL_TYPE_LUMA] > m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA]) || (g_bitDepth[CHANNEL_TYPE_CHROMA] > m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA])));
+  printf("IBD:%d ", ((m_internalBitDepth[CHANNEL_TYPE_LUMA] > m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA]) || (m_internalBitDepth[CHANNEL_TYPE_CHROMA] > m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA])));
   printf("HAD:%d ", m_bUseHADME           );
   printf("RDQ:%d ", m_useRDOQ            );
   printf("RDQTS:%d ", m_useRDOQTS        );

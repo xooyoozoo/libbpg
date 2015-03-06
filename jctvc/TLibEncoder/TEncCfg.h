@@ -3,7 +3,7 @@
  * and contributor rights, including patent rights, and no such rights are
  * granted under this license.
  *
- * Copyright (c) 2010-2014, ITU/ISO/IEC
+ * Copyright (c) 2010-2015, ITU/ISO/IEC
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -144,7 +144,12 @@ protected:
                                                  // TODO: We need to have a common sliding mechanism used by both the encoder and decoder
 
   Int       m_maxTempLayer;                      ///< Max temporal layer
-  Bool m_useAMP;
+  Bool      m_useAMP;
+  UInt      m_maxCUWidth;
+  UInt      m_maxCUHeight;
+  UInt      m_maxTotalCUDepth;
+  UInt      m_log2DiffMaxMinCodingBlockSize;
+
   //======= Transform =============
   UInt      m_uiQuadtreeTULog2MaxSize;
   UInt      m_uiQuadtreeTULog2MinSize;
@@ -185,10 +190,14 @@ protected:
   Int       m_iQPAdaptationRange;
 
   //====== Tool list ========
+  Int       m_bitDepth[MAX_NUM_CHANNEL_TYPE];
   Bool      m_bUseASR;
   Bool      m_bUseHADME;
   Bool      m_useRDOQ;
   Bool      m_useRDOQTS;
+#if T0196_SELECTIVE_RDOQ
+  Bool      m_useSelectiveRDOQ;
+#endif
   UInt      m_rdPenalty;
   Bool      m_bUseFastEnc;
   Bool      m_bUseEarlyCU;
@@ -211,6 +220,7 @@ protected:
 
   Bool      m_bUseConstrainedIntraPred;
   Bool      m_usePCM;
+  Int       m_PCMBitDepth[MAX_NUM_CHANNEL_TYPE];
   UInt      m_pcmLog2MaxSize;
   UInt      m_uiPCMLog2MinSize;
   //====== Slice ========
@@ -222,8 +232,6 @@ protected:
   Bool      m_bLFCrossSliceBoundaryFlag;
 
   Bool      m_bPCMInputBitDepthFlag;
-  UInt      m_uiPCMBitDepthLuma;
-  UInt      m_uiPCMBitDepthChroma;
   Bool      m_bPCMFilterDisableFlag;
   Bool      m_disableIntraReferenceSmoothing;
   Bool      m_loopFilterAcrossTilesEnabledFlag;
@@ -362,7 +370,10 @@ public:
   TEncCfg()
   : m_tileColumnWidth()
   , m_tileRowHeight()
-  {}
+  {
+    m_PCMBitDepth[CHANNEL_TYPE_LUMA]=8;
+    m_PCMBitDepth[CHANNEL_TYPE_CHROMA]=8;
+  }
 
   virtual ~TEncCfg()
   {}
@@ -410,8 +421,13 @@ public:
   Int       getMaxRefPicNum                 ()                              { return m_iMaxRefPicNum;           }
   Void      setMaxRefPicNum                 ( Int iMaxRefPicNum )           { m_iMaxRefPicNum = iMaxRefPicNum;  }
 
-  Int       getMaxTempLayer                 ()                              { return m_maxTempLayer;              } 
+  Int       getMaxTempLayer                 ()                              { return m_maxTempLayer;              }
   Void      setMaxTempLayer                 ( Int maxTempLayer )            { m_maxTempLayer = maxTempLayer;      }
+  Void      setMaxCUWidth                   ( UInt  u )      { m_maxCUWidth  = u; }
+  Void      setMaxCUHeight                  ( UInt  u )      { m_maxCUHeight = u; }
+  Void      setMaxTotalCUDepth              ( UInt  u )      { m_maxTotalCUDepth = u; }
+  Void      setLog2DiffMaxMinCodingBlockSize( UInt  u )      { m_log2DiffMaxMinCodingBlockSize = u; }
+
   //======== Transform =============
   Void      setQuadtreeTULog2MaxSize        ( UInt  u )      { m_uiQuadtreeTULog2MaxSize = u; }
   Void      setQuadtreeTULog2MinSize        ( UInt  u )      { m_uiQuadtreeTULog2MinSize = u; }
@@ -504,10 +520,14 @@ public:
   Int       getQPAdaptationRange            ()      { return  m_iQPAdaptationRange; }
 
   //==== Tool list ========
+  Void      setBitDepth( const ChannelType chType, Int internalBitDepthForChannel ) { m_bitDepth[chType] = internalBitDepthForChannel; }
   Void      setUseASR                       ( Bool  b )     { m_bUseASR     = b; }
   Void      setUseHADME                     ( Bool  b )     { m_bUseHADME   = b; }
   Void      setUseRDOQ                      ( Bool  b )     { m_useRDOQ    = b; }
   Void      setUseRDOQTS                    ( Bool  b )     { m_useRDOQTS  = b; }
+#if T0196_SELECTIVE_RDOQ
+  Void      setUseSelectiveRDOQ             ( Bool b )      { m_useSelectiveRDOQ = b; }
+#endif
   Void      setRDpenalty                 ( UInt  b )     { m_rdPenalty  = b; }
   Void      setUseFastEnc                   ( Bool  b )     { m_bUseFastEnc = b; }
   Void      setUseEarlyCU                   ( Bool  b )     { m_bUseEarlyCU = b; }
@@ -518,6 +538,7 @@ public:
   Void      setPCMInputBitDepthFlag         ( Bool  b )     { m_bPCMInputBitDepthFlag = b; }
   Void      setPCMFilterDisableFlag         ( Bool  b )     {  m_bPCMFilterDisableFlag = b; }
   Void      setUsePCM                       ( Bool  b )     {  m_usePCM = b;               }
+  Void      setPCMBitDepth( const ChannelType chType, Int pcmBitDepthForChannel ) { m_PCMBitDepth[chType] = pcmBitDepthForChannel; }
   Void      setPCMLog2MaxSize               ( UInt u )      { m_pcmLog2MaxSize = u;      }
   Void      setPCMLog2MinSize               ( UInt u )     { m_uiPCMLog2MinSize = u;      }
   Void      setdQPs                         ( Int*  p )     { m_aidQP       = p; }
@@ -526,6 +547,9 @@ public:
   Bool      getUseHADME                     ()      { return m_bUseHADME;   }
   Bool      getUseRDOQ                      ()      { return m_useRDOQ;    }
   Bool      getUseRDOQTS                    ()      { return m_useRDOQTS;  }
+#if T0196_SELECTIVE_RDOQ
+  Bool      getUseSelectiveRDOQ             ()      { return m_useSelectiveRDOQ; }
+#endif
   Int       getRDpenalty                    ()      { return m_rdPenalty;  }
   Bool      getUseFastEnc                   ()      { return m_bUseFastEnc; }
   Bool      getUseEarlyCU                   ()      { return m_bUseEarlyCU; }

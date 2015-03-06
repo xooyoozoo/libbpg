@@ -85,11 +85,11 @@ static int jctvc_close(HEVCEncoderContext *s, uint8_t **pbuf)
     fclose(s->yuv_file);
     s->yuv_file = NULL;
 
-    m_gcAnalyzeAll.clear();
-    m_gcAnalyzeI.clear();
-    m_gcAnalyzeP.clear();
-    m_gcAnalyzeB.clear();
-    m_gcAnalyzeAll_in.clear();
+    //m_gcAnalyzeAll.clear();
+    //m_gcAnalyzeI.clear();
+    //m_gcAnalyzeP.clear();
+    //m_gcAnalyzeB.clear();
+    //m_gcAnalyzeAll_in.clear();
 
     cTAppEncTop.create();
 
