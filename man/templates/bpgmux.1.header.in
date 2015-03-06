@@ -1,0 +1,7 @@
+.TH BPGMUX 1 "January 2015" "@VERSION@"
+.SH NAME
+bpgmux \- mux HEVC streams into BPG images
+
+.SH OPTIONS
+.nf
+\f[C]

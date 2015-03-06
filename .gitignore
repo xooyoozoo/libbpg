@@ -6,3 +6,9 @@ bpgenc
 bpgview
 bpgmux
 out.bpg
+
+/Makefile.in
+/aclocal.m4
+/autom4te.cache/
+/build-aux/
+/configure
