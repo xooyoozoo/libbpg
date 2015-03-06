@@ -4,9 +4,9 @@ BPG Image library and utilities
 1) Quick introduction
 ---------------------
 
-- Edit the Makefile to change the compile options (the default compile
-  options should be OK for Linux). Type 'make' to compile and 'make
-  install' to install the compiled binaries.
+- Run autogen.sh and then configure, optionally with extra flags.
+  Type 'make' to compile and 'make install' to install the compiled
+  binaries.
 
 - x265 usage: for much increased compression speed (but lower
   quality), you can compile and install x265 and then enable its use
@@ -23,7 +23,7 @@ BPG Image library and utilities
 - An HTML demonstration (with a precompiled Javascript decoder) is
   available in html/index.html (if you use Chrome and want to use
   file:// to access it, launch Chrome with the option
-  --allow-file-access-from-files). 
+  --allow-file-access-from-files).
 
 - The BPG file format is specified in doc/bpg_spec.txt.
 
@@ -52,8 +52,8 @@ as input.
   the JPEG YCbCr data, not the RGB data. In any case, the bit depth
   should match the one of your picture otherwise the file size
   increases a lot. By default the lossless mode sets the bit depth to
-  8 bits. The prefered color space is set to "rgb". Notes: 
-  
+  8 bits. The prefered color space is set to "rgb". Notes:
+
     - lossless mode is less tested that the lossy mode but it usually
       gives better results that PNG on photographic images.
 
@@ -101,14 +101,14 @@ as input.
   option. It contains one number per image giving its duration in
   centiseconds. All durations are rounded to a multiple of '1/fps', so
   it is important to set a consistent frame rate.
-  
+
   The necessary frames and delay file can be generated from animated
   GIFs with the ImageMagick tools:
-  
+
   convert -coalesce anim.gif anim%d.png
- 
+
   identify -format "%T\n" anim.gif > anim.txt
-  
+
   In order to reduce the file size, the frame rate can be choosen so
   that most frames have a frame period of 1 (hence if anim.txt
   contains only frame durations of 5 centiseconds, then choose a frame
